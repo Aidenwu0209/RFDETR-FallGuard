@@ -62,5 +62,5 @@ therefore reproducible today but requires a deliberate future migration.
 - No AP, event metric, FPS, model quality, or VRAM result from synthetic/mock work is presented as
   scientific or deployment evidence. The synthetic Nano/Small run proves only that training,
   checkpoint serialization, official reload, and GPU inference execute.
-- The generated validation artifacts live only under `/tmp`; an accidentally generated root-level
-  mock artifact set was identified and removed before final QA.
+- The 1.9 GiB synthetic dataset and checkpoints were removed from their exact `/tmp` path after
+  recording an ignored mechanics-only evidence report; no synthetic asset entered Git.
