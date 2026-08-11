@@ -139,7 +139,8 @@ python scripts/evaluate_detector.py \
   --dataset-dir data/processed/fallen-person/dataset \
   --weights checkpoints/small/checkpoint_best_total.pth \
   --model-variant small \
-  --split test
+  --split test \
+  --output-json artifacts/training-validation/small-test-evaluation.json
 
 python scripts/train_semantic_adapter.py \
   --config configs/qlora.yaml \

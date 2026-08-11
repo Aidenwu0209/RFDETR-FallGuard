@@ -12,39 +12,39 @@ Evidence date: 2026-08-11. Runtime evidence was collected on
 | M1 Mock vertical slice | VERIFIED_INTEGRATION | Exit 0; explicitly `MOCK`, 1 event, 1 alert, 3 transitions, before/during/after person crops; formal eligibility false |
 | M2 RF-DETR adapter, conversion, image/frame/batch, training/evaluation mapping, CLIs | VERIFIED_UNIT | Fake official-output contract tests pass; real fine-tuned checkpoints use official `from_checkpoint`, enforce contiguous class IDs, and reject a Nano/Small architecture mismatch; unsupported `gradient_checkpointing` is rejected |
 | M2 real RF-DETR inference | VERIFIED_INTEGRATION | Official Nano/Small weights passed official MD5 checks and separate RTX 4060 CUDA inference on the same public image; each returned four `person` detections at 0.5; reports explicitly remain single-image smoke evidence |
-| M2 posture-multiclass training/evaluation | BLOCKED_EXTERNAL | Data audit/hash gate and short-run CLI are ready. One-epoch synthetic Nano and Small GPU runs produced reloadable four-class checkpoints, proving mechanics only; Roboflow login/key is still required for real-data training |
+| M2 posture-multiclass training/evaluation | VERIFIED_INTEGRATION | The supplied Fallen Person archive was SHA-256 verified, normalized without modifying the raw copy, and used for authorized two-epoch Nano/Small CUDA fine-tuning. Both checkpoints reload independently. Engineering-only test mAP50:95 is 0.6940 Nano and 0.7071 Small; the source split has cross-split near duplicates and is not formal generalization evidence |
 | M3 pinned ByteTrack adapter and TrackManager | VERIFIED_INTEGRATION | Real `supervision==0.30.0` tests pass for posture-class changes and one-frame disappearance/reappearance with stable ID; scope, history, expiry, and empty-frame advancement tested |
-| M4 temporal state machine, events, keyframes | VERIFIED_INTEGRATION | Seconds/coordinates/smoothing, auditable transitions, timeout, atomic event close/reopen, bounded buffer, random-access video reread, and before/during/after persistence tested |
+| M4 temporal state machine, events, keyframes | VERIFIED_INTEGRATION | A candidate now starts only from downward motion or the configured fall class; static lying/aspect ratio is supporting evidence only. Event records are promoted only after FALLING/LYING, so duration thresholds affect event presence. Seconds/coordinates/smoothing, timeout, atomic close/reopen, bounded buffer, random-access reread, and keyframes are tested |
 | M5 Router, Mock Provider, privacy, AlertManager | VERIFIED_INTEGRATION | Mock end-to-end route passes; cloud image double-consent, fallback reason, unexpected-error propagation, structured schema, redaction, and application-owned alert tested |
 | M5 OpenAI, DeepSeek, Local Qwen provider implementations | CODE_COMPLETE_UNVALIDATED | OpenAI 2.53.0 structured-parse SDK contract is present; no paid API call or Local Qwen model load was authorized |
 | M5 QLoRA schema, grouped split, packing, validation, dry-run, execution entry | VERIFIED_UNIT | Synthetic manifests validate, cross-split leakage is rejected, dry-run reports missing real manifests as `BLOCKED_EXTERNAL`; no training ran |
 | M6 detection/event/deployment evaluation and experiment recorder | VERIFIED_INTEGRATION | Official detection delegation, one-to-one event metrics, unavailable-metric reasons, mock formal rejection, warm-up reset, resource timing, and reproducibility snapshot tested |
 | M6 GMDCSA-24 grouped validation preparation | VERIFIED_INTEGRATION | Zenodo v2.0 archive MD5 verified; 160 readable videos, 4 subjects, 79 ADL/81 Fall, no duplicate hashes or subject leakage; S1-S2 development, S3 validation, S4 locked test; 16-video subset generated |
 | M6 real cascade engineering smoke | VERIFIED_INTEGRATION | Official Small `person_only` completed RF-DETR -> ByteTrack -> Temporal -> Event on one Fall and one ADL clip; both produced one unique candidate, demonstrating execution and also why person-only output is invalid for final thresholds |
-| M6 threshold candidate/freeze protocol | VERIFIED_UNIT | Four predeclared configs; report/metric/hash/subject/video/parameter integrity checks; deterministic S1-S2 selection; complete frozen config; one-time S3 confirmation; S4 requires matching confirmation, explicit unlock, and all videos |
-| M6 formal real-data threshold result | BLOCKED_EXTERNAL | Grouped full-cascade runner is implemented, but a posture checkpoint is still required; clip labels cannot support detection-delay claims without human onset timestamps |
+| M6 threshold candidate/freeze protocol | VERIFIED_INTEGRATION | Eight bounded S1-S2 candidates were evaluated with matching model, checkpoint, manifest, video IDs, parameters, Git commit, and pipeline fingerprint. Nano confidence/tracker activation 0.75 was frozen after 4 TP, 0 FP, 0 FN, 4 TN; S4 requires a matching S3 confirmation, explicit unlock, and all videos |
+| M6 formal real-data threshold result | BLOCKED_EXTERNAL | The one-time frozen S3 run produced 1 TP, 0 FP, 1 FN, 2 TN (recall 0.5, F1 0.6667). The strict confirmation gate correctly rejected it, so no formal threshold is confirmed and S4 remains locked. A revised checkpoint/new development cycle needs a fresh untouched validation group; S3 must not be tuned on or reused as if unseen |
 | M7 Gradio, docs, CLI and full QA | VERIFIED_INTEGRATION | Five-tab UI rendered in a real browser with model/GPU reports, dataset protocol, training state, and local-only key status; non-blocking HTTP 200 probe passes |
 | Continuous live camera streaming | NOT_IMPLEMENTED | UI intentionally supports uploaded/webcam-recorded finite clips and does not claim continuous real-time monitoring |
-| GitHub publication | VERIFIED_INTEGRATION | Commits `63f999e` and `5055b93` are on `main`; data, weights, artifacts, and secrets remain ignored |
+| GitHub publication | VERIFIED_INTEGRATION | The implementation and evidence-bound protocol are published on `main`; data, weights, artifacts, videos, environment files, and secrets remain ignored |
 
 ## Baseline QA evidence
 
 ```text
 .venv/bin/ruff format .
-  exit 0; 98 files unchanged on the latest implementation run
+  exit 0; 100 files unchanged on the latest implementation run
 .venv/bin/ruff check .
   exit 0; all checks passed
 .venv/bin/mypy src app scripts
-  exit 0; success, 65 source files after training extras were installed
+  exit 0; success, 67 source files
 .venv/bin/pytest -q
-  exit 0; 70 passed, 2 deselected, 0 failed, 0 skipped, 1 warning
+  exit 0; 79 passed, 2 deselected, 0 failed, 0 skipped, 1 warning
 .venv/bin/python -m compileall -q src app scripts tests datasets
   exit 0
 .venv/bin/python scripts/check_environment.py
   exit 0; local-only audit, network_or_paid_call_performed=false
 .venv/bin/python scripts/smoke_gradio.py
   exit 0; HTTP 200 and server closed
-18 required scripts with --help
+19 required scripts with --help
   exit 0
 ```
 
@@ -57,11 +57,13 @@ therefore reproducible today but requires a deliberate future migration.
 
 - No mock result was written into a formal benchmark. Engineering timing is labeled
   `MOCK_ENGINEERING_ONLY` and `formal_benchmark_eligible=false`.
-- No paid API call, long training, image upload, or privacy-data transfer was performed. The user
-  explicitly authorized official model and dataset downloads plus short detector fine-tuning.
+- No paid API call, image upload, or privacy-data transfer was performed. The user explicitly
+  authorized official model and dataset downloads plus short two-epoch detector fine-tuning.
 - Official weights, dataset archives, manifests, reports, and future checkpoints remain outside Git.
-- No AP, event metric, FPS, model quality, or VRAM result from synthetic/mock work is presented as
-  scientific or deployment evidence. The synthetic Nano/Small run proves only that training,
-  checkpoint serialization, official reload, and GPU inference execute.
+- Fallen Person detector metrics are engineering-only because the export has 21,575 cross-split
+  dHash near-duplicate pairs and no person/video group identifiers. They are not presented as
+  scientific generalization evidence.
+- The S3 grouped event result is a valid negative validation result: it prevents confirmation of a
+  formal threshold. It must not be repaired by retuning on S3 or by inspecting locked S4 results.
 - The 1.9 GiB synthetic dataset and checkpoints were removed from their exact `/tmp` path after
   recording an ignored mechanics-only evidence report; no synthetic asset entered Git.

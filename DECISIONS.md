@@ -66,8 +66,10 @@ catch only those expected failures; an unexpected programming error propagates a
 ## D-011: runtime versus planned hardware
 
 The supplied project attachment discusses an RTX 5070 Ti plan. The actual Legion audit showed an
-RTX 4060 Laptop GPU with 8188 MiB driver-visible memory, but no PyTorch installation. Reports use
-the observed runtime and do not treat driver visibility as CUDA execution proof.
+RTX 4060 Laptop GPU with 8188 MiB memory. The project environment now verifies
+`torch==2.13.0+cu130`, CUDA availability, and real model execution on that GPU. Reports use this
+observed runtime rather than the planned hardware and never treat driver visibility alone as CUDA
+execution proof.
 
 ## D-012: Git publication
 
@@ -97,20 +99,38 @@ indices are derived by sorting COCO category IDs and must remain contiguous from
 export does not contain person/video group identifiers, so its original validation split cannot
 substitute for the subject-isolated GMDCSA-24 cascade protocol.
 
+The supplied archive has SHA-256
+`352d0ba25c5b82307749aaaba3f8da34874892fe45e5c9a1197d6e55c7566892`. Its duplicate unused
+`fallen` category is normalized deterministically, while source files remain immutable. Only
+Roboflow rounding overflow up to 0.01 pixel is clipped. The audit found 21,575 cross-split dHash
+near-duplicate pairs, so its detector test metrics remain engineering-only.
+
 ## D-016: fine-tuned checkpoint loading and smoke boundary
 
 Locally trained RF-DETR checkpoints are loaded with the upstream `from_checkpoint` path, not as
 official starter weights. The adapter pins the four-class head and rejects a selected Nano/Small
-architecture mismatch. One-epoch synthetic GPU runs for both variants proved training,
-serialization, safe reload, and inference mechanics only. RF-DETR 1.9.1 omits query-layout fields
-from these best-total checkpoint args, so the generic reload warning is retained; both smoke
-checkpoints were separately verified to carry the expected default 300 x 13 query rows.
+architecture mismatch. Two-epoch real-data CUDA runs produced independently reloadable Nano and
+Small checkpoints with SHA-256 `3d190d2450a1dffcd2340e198f66d14475c9f1f1f0cd3fcc0246d7edba77cc6f`
+and `7c843e2570a077317c95e3458d50a402f36f6ac8ebcd8bffe7fa8da28f898e71`.
+RF-DETR 1.9.1 omits query-layout fields from these best-total checkpoint args, so the generic
+reload warning is retained; both were separately verified to carry the expected default 300 x 13
+query rows.
 
 ## D-017: threshold freeze and locked-test gate
 
-Four candidate configurations are declared before grouped evaluation. Nano and Small candidates
-must use the same S1-S2 video IDs and manifest. Selection recomputes clip metrics and rejects
-subject leakage, mixed partitions, parameter/config drift, duplicate candidates, and silently
-relaxed quality gates. The selected full pipeline config is frozen before one S3 pass. S4 requires
-the matching S3 confirmation artifact, an explicit unlock, and all Subject 4 videos; it cannot
-influence checkpoint or threshold selection.
+Four stage-1 configurations and a bounded four-confidence stage-2 precision grid are declared
+before grouped evaluation. Nano and Small candidates must use the same S1-S2 video IDs and
+manifest. Selection recomputes clip metrics and rejects subject leakage, mixed partitions,
+parameter/config drift, duplicate candidates, implementation-fingerprint drift, and silently
+relaxed quality gates. Nano confidence/tracker activation 0.75 was frozen after perfect S1-S2
+clip metrics, then failed its one-time S3 gate with 1 TP, 0 FP, 1 FN, and 2 TN. No formal threshold
+is confirmed. S4 remains locked and cannot influence checkpoint or threshold selection.
+
+## D-018: temporal candidate and event semantics
+
+Static lying or a wide aspect ratio cannot independently initiate a fall candidate; initiation
+requires downward motion or the configured fall posture class. Lying and aspect ratio remain
+supporting evidence after initiation. A SUSPECTED transition is cached as a pending candidate and
+does not create a formal event until the track reaches FALLING or LYING. This makes the declared
+duration thresholds observable in event-presence metrics and prevents transient suspects from
+being counted as completed falls.

@@ -19,6 +19,11 @@ def main() -> None:
     parser.add_argument("--weights", type=Path, required=True)
     parser.add_argument("--model-variant", choices=("nano", "small"))
     parser.add_argument("--split", choices=("val", "test"), default="test")
+    parser.add_argument(
+        "--output-json",
+        type=Path,
+        help="Write machine-readable metrics even when the upstream evaluator logs to stdout.",
+    )
     args = parser.parse_args()
     config = load_config(args.config)
     detector = RFDETRDetector(
@@ -32,7 +37,11 @@ def main() -> None:
     )
     detector.load()
     metrics = evaluate_with_official_rfdetr(detector, args.dataset_dir, split=args.split)
-    print(json.dumps(metrics, ensure_ascii=False, indent=2, default=str))
+    rendered = json.dumps(metrics, ensure_ascii=False, indent=2, default=str)
+    if args.output_json:
+        args.output_json.parent.mkdir(parents=True, exist_ok=True)
+        args.output_json.write_text(rendered + "\n", encoding="utf-8")
+    print(rendered)
 
 
 if __name__ == "__main__":
