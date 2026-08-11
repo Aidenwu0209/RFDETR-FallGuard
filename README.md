@@ -4,9 +4,9 @@ An auditable fall-monitoring cascade built around official RF-DETR, class-agnost
 tracking, temporal event confirmation, provider-agnostic semantic review, and application-owned
 alerts.
 
-> Current scope: real official Nano/Small person-detection smoke validation, audited posture-data
-> and short-training entry points, plus grouped GMDCSA-24 preparation. No real-data posture
-> checkpoint, final threshold, or scientific accuracy claim is bundled.
+> Current scope: official Nano/Small validation, audited four-class posture fine-tuning, and
+> subject-grouped cascade validation. Checkpoints, datasets, and generated reports stay outside
+> Git. No scientific generalization claim is bundled.
 
 ## Quick start
 
@@ -154,6 +154,22 @@ python scripts/prepare_gmdcsa24.py \
   --archive data/raw/gmdcsa24/GMDCSA24-v2.0.zip \
   --extract-dir data/raw/gmdcsa24/extracted \
   --output-dir data/processed/gmdcsa24
+```
+
+The fresh validation cycle uses the public CC BY 4.0 Figshare-Fall29 archive. Its immutable
+subject split, candidate grid, and pass gates are predeclared in
+`configs/validation/figshare_fall29_v1.yaml` before any pipeline result is inspected:
+
+```bash
+python scripts/prepare_figshare_fall29.py \
+  --archive data/raw/figshare-fall29/VideoDataset.zip \
+  --extract-dir data/raw/figshare-fall29/extracted \
+  --output-dir data/processed/figshare-fall29
+
+python scripts/generate_threshold_candidates.py \
+  --base-config data/processed/fallen-person/posture_profile.yaml \
+  --output-dir artifacts/validation/figshare-fall29-v1/candidates \
+  --precision-grid-only
 ```
 
 The grouped runner requires an actual posture checkpoint and a config whose class order matches

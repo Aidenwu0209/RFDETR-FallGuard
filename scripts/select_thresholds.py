@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Select one S1-S2 candidate, freeze its full pipeline parameters, and emit an S3 config."""
+"""Select a development candidate and freeze it for grouped validation."""
 
 from __future__ import annotations
 

@@ -23,6 +23,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
         "train_semantic_adapter.py",
         "validate_official_model.py",
         "prepare_gmdcsa24.py",
+        "prepare_figshare_fall29.py",
         "validate_grouped_pipeline.py",
         "check_api_configuration.py",
         "normalize_fallen_person.py",

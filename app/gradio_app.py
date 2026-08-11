@@ -182,9 +182,10 @@ def build_app(config_path: str = "configs/profiles/development.yaml") -> Any:
                     lambda: environment_status()["datasets"], outputs=dataset_status
                 )
                 gr.Markdown(
-                    "GMDCSA-24 split is subject-isolated: S1-S2 threshold development, "
-                    "S3 threshold validation, S4 locked test. Clip labels do not provide exact "
-                    "fall timestamps; detection delay stays unavailable until human annotation."
+                    "Every formal protocol is subject-isolated. GMDCSA-24 retains its historical "
+                    "S1-S2/S3/S4 evidence; Figshare-Fall29 provides fresh development, validation, "
+                    "and locked-test subject groups. Clip labels alone do not justify detection "
+                    "delay claims."
                 )
             with gr.Tab("Training & Thresholds"):
                 training_status = gr.JSON(

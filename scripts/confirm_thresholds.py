@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Confirm frozen thresholds once on S3 without allowing parameter retuning or S4 access."""
+"""Confirm frozen thresholds once on an untouched subject group without retuning."""
 
 from __future__ import annotations
 

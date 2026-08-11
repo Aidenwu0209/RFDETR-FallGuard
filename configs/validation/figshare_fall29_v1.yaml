@@ -1,0 +1,53 @@
+protocol_id: figshare-fall29-v1
+status: predeclared_before_pipeline_evaluation
+dataset:
+  name: Video-Based Fall Detection Dataset with 2017 Activities from 29 Subjects
+  short_name: Figshare-Fall29
+  version: 2
+  doi: 10.6084/m9.figshare.28596332.v2
+  source: https://figshare.com/articles/dataset/28596332
+  license: CC BY 4.0
+  archive_bytes: 2529520868
+  archive_md5: c784167d08f2fa94e3afd36cec758e1f
+partition:
+  unit: subject
+  threshold_development: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+  threshold_validation: [18, 19, 20, 21, 22, 23]
+  locked_test: [24, 25, 26, 27, 28, 29]
+  small_subset_selection: first 2 sorted videos per subject and clip label
+models:
+  variants: [nano, small]
+  nano_checkpoint_sha256: 3d190d2450a1dffcd2340e198f66d14475c9f1f1f0cd3fcc0246d7edba77cc6f
+  small_checkpoint_sha256: 7c843e2570a077317c95e3458d50a402f36f6ac8ebcd8bffe7fa8da28f898e71
+pipeline: posture_multiclass -> ByteTrack -> Temporal -> Event
+candidates:
+  grid_kind: fixed_high_precision_temporal_with_detector_tracker_confidence_sweep
+  detector_and_tracker_confidence: [0.40, 0.50, 0.60, 0.70, 0.75, 0.80]
+  preferred_variant_on_exact_metric_tie: nano
+development_gate:
+  minimum_recall: 0.90
+  maximum_false_positive_clips: 1
+  selection_tiebreak:
+    - fewest_false_positive_clips
+    - highest_f1
+    - highest_recall
+    - highest_specificity
+    - preferred_model_variant
+    - lowest_detector_confidence
+validation_gate:
+  one_time_only: true
+  minimum_recall: 0.90
+  maximum_false_positive_clips: 0
+  parameters_must_match_lock: true
+locked_test_gate:
+  run_only_after_validation_confirmation: true
+  all_videos_required: true
+  must_not_influence_model_or_threshold_selection: true
+claims:
+  formal_generalization_claim: false
+  detection_delay_available: false
+  reason: simulated clip labels without independently reviewed fall-onset timestamps
+historical_boundary:
+  gmdcsa24_subject_3_is_consumed: true
+  gmdcsa24_subject_4_remains_unopened: true
+  rule: neither historical subject may be represented as a fresh Figshare-Fall29 group

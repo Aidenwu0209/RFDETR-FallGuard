@@ -28,6 +28,7 @@ def test_threshold_status_requires_explicit_lock_and_confirmation(tmp_path) -> N
     status = environment_status(tmp_path)
     assert status["validation"]["grouped_reports"] == [str(validation / "candidate.json")]
     assert status["validation"]["thresholds_frozen"] is False
+    assert status["validation"]["thresholds_confirmed_on_group"] is False
     assert status["validation"]["thresholds_confirmed_on_s3"] is False
 
     (validation / "threshold-lock.json").write_text(
@@ -40,4 +41,5 @@ def test_threshold_status_requires_explicit_lock_and_confirmation(tmp_path) -> N
     )
     status = environment_status(tmp_path)
     assert status["validation"]["thresholds_frozen"] is True
+    assert status["validation"]["thresholds_confirmed_on_group"] is True
     assert status["validation"]["thresholds_confirmed_on_s3"] is True

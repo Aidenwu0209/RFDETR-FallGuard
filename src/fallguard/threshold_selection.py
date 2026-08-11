@@ -19,8 +19,14 @@ DEVELOPMENT_PARTITION = "threshold_development"
 VALIDATION_PARTITION = "threshold_validation"
 LOCKED_TEST_PARTITION = "locked_test"
 GROUPED_REPORT_KIND = "GROUPED_CLIP_LEVEL_INTERNAL_VALIDATION"
-THRESHOLD_LOCK_KIND = "THRESHOLD_LOCK_PENDING_S3_CONFIRMATION"
-THRESHOLD_CONFIRMATION_KIND = "THRESHOLD_LOCK_CONFIRMED_ON_S3"
+THRESHOLD_LOCK_KIND = "GROUPED_THRESHOLD_LOCK_PENDING_CONFIRMATION"
+THRESHOLD_CONFIRMATION_KIND = "GROUPED_THRESHOLD_LOCK_CONFIRMED"
+LEGACY_THRESHOLD_LOCK_KIND = "THRESHOLD_LOCK_PENDING_S3_CONFIRMATION"
+LEGACY_THRESHOLD_CONFIRMATION_KIND = "THRESHOLD_LOCK_CONFIRMED_ON_S3"
+PENDING_THRESHOLD_LOCK_KINDS = frozenset({THRESHOLD_LOCK_KIND, LEGACY_THRESHOLD_LOCK_KIND})
+THRESHOLD_CONFIRMATION_KINDS = frozenset(
+    {THRESHOLD_CONFIRMATION_KIND, LEGACY_THRESHOLD_CONFIRMATION_KIND}
+)
 SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 GIT_COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}")
 CANDIDATE_PRESETS: dict[str, dict[str, dict[str, int | float]]] = {
@@ -84,6 +90,8 @@ EXPANDED_PRECISION_PRESETS: dict[str, dict[str, dict[str, int | float]]] = {
         "temporal": dict(CANDIDATE_PRESETS["high_precision"]["temporal"]),
     }
     for name, confidence in (
+        ("precision_040", 0.40),
+        ("precision_050", 0.50),
         ("precision_060", 0.60),
         ("precision_070", 0.70),
         ("precision_075", 0.75),
@@ -118,16 +126,60 @@ def read_json_object(path: str | Path) -> dict[str, Any]:
     return value
 
 
+def is_pending_threshold_lock(value: object) -> bool:
+    return isinstance(value, dict) and value.get("lock_kind") in PENDING_THRESHOLD_LOCK_KINDS
+
+
+def is_threshold_confirmation(value: object) -> bool:
+    return (
+        isinstance(value, dict) and value.get("confirmation_kind") in THRESHOLD_CONFIRMATION_KINDS
+    )
+
+
+def _validated_subject_protocol(protocol: object) -> dict[str, set[int]]:
+    if not isinstance(protocol, dict) or protocol.get("partition_unit") != "subject":
+        raise ConfigurationError("grouped report protocol must partition by subject")
+    partitions: dict[str, set[int]] = {}
+    for partition in (DEVELOPMENT_PARTITION, VALIDATION_PARTITION, LOCKED_TEST_PARTITION):
+        raw_subjects = protocol.get(partition)
+        if (
+            not isinstance(raw_subjects, list)
+            or not raw_subjects
+            or any(
+                not isinstance(subject, int) or isinstance(subject, bool)
+                for subject in raw_subjects
+            )
+            or len(set(raw_subjects)) != len(raw_subjects)
+        ):
+            raise ConfigurationError(f"protocol {partition} must contain unique integer subjects")
+        partitions[partition] = set(raw_subjects)
+    partition_items = list(partitions.items())
+    for index, (left_name, left_subjects) in enumerate(partition_items):
+        for right_name, right_subjects in partition_items[index + 1 :]:
+            if left_subjects & right_subjects:
+                raise ConfigurationError(
+                    f"protocol subject leakage between {left_name} and {right_name}"
+                )
+    return partitions
+
+
 def generate_candidate_configs(
-    base_config: AppConfig, *, include_expanded_precision_grid: bool = False
+    base_config: AppConfig,
+    *,
+    include_expanded_precision_grid: bool = False,
+    precision_grid_only: bool = False,
 ) -> dict[str, dict[str, Any]]:
     if base_config.detector.mode.value != "posture_multiclass":
         raise ConfigurationError("threshold candidates require posture_multiclass mode")
     if not base_config.detector.class_names:
         raise ConfigurationError("threshold candidates require audited posture class names")
     generated: dict[str, dict[str, Any]] = {}
-    presets = dict(CANDIDATE_PRESETS)
-    if include_expanded_precision_grid:
+    if include_expanded_precision_grid and precision_grid_only:
+        raise ConfigurationError(
+            "include_expanded_precision_grid and precision_grid_only are mutually exclusive"
+        )
+    presets = dict(EXPANDED_PRECISION_PRESETS if precision_grid_only else CANDIDATE_PRESETS)
+    if include_expanded_precision_grid and not precision_grid_only:
         presets.update(EXPANDED_PRECISION_PRESETS)
     for name, updates in presets.items():
         candidate = base_config.model_copy(deep=True)
@@ -215,18 +267,17 @@ def validate_grouped_report(report: dict[str, Any], *, expected_partition: str) 
         raise ConfigurationError(
             f"report partition must be {expected_partition}, got {report.get('partition')}"
         )
+    protocol = report.get("protocol")
+    allowed_partitions = _validated_subject_protocol(protocol)
+    allowed_subjects = allowed_partitions.get(expected_partition)
+    if allowed_subjects is None:
+        raise ConfigurationError(f"unknown grouped partition: {expected_partition}")
     rows_raw = report.get("rows")
     if not isinstance(rows_raw, list) or not rows_raw:
         raise ConfigurationError("grouped report has no clip rows")
     rows: list[dict[str, Any]] = []
     video_ids: list[str] = []
-    allowed_subjects = {
-        DEVELOPMENT_PARTITION: {1, 2},
-        VALIDATION_PARTITION: {3},
-        LOCKED_TEST_PARTITION: {4},
-    }.get(expected_partition)
-    if allowed_subjects is None:
-        raise ConfigurationError(f"unknown grouped partition: {expected_partition}")
+    observed_subjects: set[int] = set()
     for raw in rows_raw:
         if not isinstance(raw, dict):
             raise ConfigurationError("grouped report contains an invalid clip row")
@@ -240,11 +291,16 @@ def validate_grouped_report(report: dict[str, Any], *, expected_partition: str) 
         ):
             raise ConfigurationError("grouped report clip labels must be booleans")
         if raw.get("subject_id") not in allowed_subjects:
-            raise ConfigurationError("grouped report contains a subject outside its partition")
+            raise ConfigurationError(
+                "grouped report contains a subject outside its declared protocol partition"
+            )
+        observed_subjects.add(raw["subject_id"])
         rows.append(raw)
         video_ids.append(video_id)
     if len(set(video_ids)) != len(video_ids):
         raise ConfigurationError("grouped report contains duplicate video IDs")
+    if observed_subjects != allowed_subjects:
+        raise ConfigurationError("grouped report does not cover every subject in its partition")
     selected_video_ids = report.get("selected_video_ids")
     if selected_video_ids != sorted(video_ids):
         raise ConfigurationError("grouped report selected_video_ids do not match its clip rows")
@@ -299,17 +355,6 @@ def validate_grouped_report(report: dict[str, Any], *, expected_partition: str) 
     }
     if parameters != snapshot_parameters:
         raise ConfigurationError("grouped report parameters differ from its config snapshot")
-    protocol = report.get("protocol")
-    if not isinstance(protocol, dict):
-        raise ConfigurationError("grouped report has no protocol")
-    expected_protocol = {
-        "partition_unit": "subject",
-        DEVELOPMENT_PARTITION: [1, 2],
-        VALIDATION_PARTITION: [3],
-        LOCKED_TEST_PARTITION: [4],
-    }
-    if any(protocol.get(key) != value for key, value in expected_protocol.items()):
-        raise ConfigurationError("grouped report protocol does not preserve the subject split")
     return {
         "report": report,
         "rows": rows,
@@ -463,8 +508,8 @@ def select_thresholds(
 
 
 def frozen_config_from_lock(lock: dict[str, Any]) -> dict[str, Any]:
-    if lock.get("lock_kind") != THRESHOLD_LOCK_KIND:
-        raise ConfigurationError("not a pending S3 threshold lock")
+    if not is_pending_threshold_lock(lock):
+        raise ConfigurationError("not a pending grouped threshold lock")
     selected = lock.get("selected")
     if not isinstance(selected, dict) or not isinstance(selected.get("config_snapshot"), dict):
         raise ConfigurationError("threshold lock has no selected config snapshot")
@@ -504,8 +549,8 @@ def confirm_thresholds(
     minimum_recall: float,
     maximum_false_positive_clips: int,
 ) -> dict[str, Any]:
-    if lock.get("lock_kind") != THRESHOLD_LOCK_KIND:
-        raise ConfigurationError("not a pending S3 threshold lock")
+    if not is_pending_threshold_lock(lock):
+        raise ConfigurationError("not a pending grouped threshold lock")
     if not 0.0 <= minimum_recall <= 1.0:
         raise ConfigurationError("minimum_recall must be in [0, 1]")
     if maximum_false_positive_clips < 0:
@@ -516,15 +561,17 @@ def confirm_thresholds(
     validated = validate_grouped_report(validation_report, expected_partition=VALIDATION_PARTITION)
     for field in ("manifest_sha256", "protocol", "pipeline_implementation_sha256"):
         if validation_report[field] != lock.get(field):
-            raise ConfigurationError(f"S3 report {field} differs from the threshold lock")
+            raise ConfigurationError(f"validation report {field} differs from the threshold lock")
     for field in ("model_variant", "weights_sha256", "pipeline_parameters"):
         if validation_report[field] != selected.get(field):
-            raise ConfigurationError(f"S3 report {field} differs from the selected candidate")
+            raise ConfigurationError(
+                f"validation report {field} differs from the selected candidate"
+            )
     development_video_ids = lock.get("development_video_ids")
     if not isinstance(development_video_ids, list):
         raise ConfigurationError("threshold lock has no development video list")
     if set(development_video_ids) & set(validated["video_ids"]):
-        raise ConfigurationError("S3 report reuses a threshold-development video")
+        raise ConfigurationError("validation report reuses a threshold-development video")
     metrics = validated["metrics"]
     recall = metrics["recall"]
     if (
@@ -532,7 +579,9 @@ def confirm_thresholds(
         or float(recall) < minimum_recall
         or int(metrics["false_positive_clips"]) > maximum_false_positive_clips
     ):
-        raise ConfigurationError("S3 report does not satisfy the declared confirmation gate")
+        raise ConfigurationError(
+            "validation report does not satisfy the declared confirmation gate"
+        )
     return {
         "confirmation_kind": THRESHOLD_CONFIRMATION_KIND,
         "threshold_lock_sha256": canonical_sha256(lock),
@@ -544,7 +593,7 @@ def confirm_thresholds(
         "confirmation_policy": {
             "minimum_recall": minimum_recall,
             "maximum_false_positive_clips": maximum_false_positive_clips,
-            "parameters_retuned_on_s3": False,
+            "parameters_retuned_on_validation_group": False,
         },
         "selected": {
             key: deepcopy(selected[key])
@@ -567,9 +616,9 @@ def confirm_thresholds(
         },
         "formal_thresholds_confirmed": True,
         "formal_generalization_claim": False,
-        "detection_delay_available": False,
-        "detection_delay_unavailable_reason": (
-            "GMDCSA-24 supplies clip labels but no human-confirmed fall onset timestamps"
+        "detection_delay_available": bool(validation_report.get("detection_delay_available")),
+        "detection_delay_unavailable_reason": validation_report.get(
+            "detection_delay_unavailable_reason"
         ),
     }
 
@@ -584,20 +633,20 @@ def validate_locked_test_confirmation(
     pipeline_parameters: dict[str, Any],
     pipeline_implementation_sha256: str,
 ) -> None:
-    if confirmation.get("confirmation_kind") != THRESHOLD_CONFIRMATION_KIND:
-        raise ConfigurationError("not an accepted S3 confirmation artifact")
+    if not is_threshold_confirmation(confirmation):
+        raise ConfigurationError("not an accepted grouped confirmation artifact")
     selected = confirmation.get("selected")
     if not isinstance(selected, dict):
-        raise ConfigurationError("S3 confirmation has no selected candidate")
+        raise ConfigurationError("grouped confirmation has no selected candidate")
     if confirmation.get("manifest_sha256") != manifest_sha256:
-        raise ConfigurationError("S3 confirmation uses a different GMDCSA-24 manifest")
+        raise ConfigurationError("grouped confirmation uses a different dataset manifest")
     if confirmation.get("protocol") != protocol:
-        raise ConfigurationError("S3 confirmation uses a different grouped protocol")
+        raise ConfigurationError("grouped confirmation uses a different grouped protocol")
     if selected.get("pipeline_implementation_sha256") != pipeline_implementation_sha256:
-        raise ConfigurationError("locked-test implementation differs from the S3 confirmation")
+        raise ConfigurationError("locked-test implementation differs from the confirmation")
     if (
         selected.get("model_variant") != model_variant
         or selected.get("weights_sha256") != weights_sha256
         or selected.get("pipeline_parameters") != pipeline_parameters
     ):
-        raise ConfigurationError("locked-test configuration differs from the S3 confirmation")
+        raise ConfigurationError("locked-test configuration differs from the confirmation")

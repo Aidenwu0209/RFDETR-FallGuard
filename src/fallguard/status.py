@@ -8,10 +8,7 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 
-from fallguard.threshold_selection import (
-    THRESHOLD_CONFIRMATION_KIND,
-    THRESHOLD_LOCK_KIND,
-)
+from fallguard.threshold_selection import is_pending_threshold_lock, is_threshold_confirmation
 
 
 def _package_version(name: str) -> str | None:
@@ -119,6 +116,8 @@ def environment_status(root: str | Path = ".") -> dict[str, Any]:
     ]
     gmd_archive = project_root / "data/raw/gmdcsa24/GMDCSA24-v2.0.zip"
     gmd_manifest = project_root / "data/processed/gmdcsa24/manifest.json"
+    fall29_archive = project_root / "data/raw/figshare-fall29/VideoDataset.zip"
+    fall29_manifest = project_root / "data/processed/figshare-fall29/manifest.json"
     fallen_root = project_root / "data/raw/fallen-person"
     fallen_audit = project_root / "data/processed/fallen-person/audit.json"
     validation_dir = project_root / "artifacts/validation"
@@ -148,6 +147,10 @@ def environment_status(root: str | Path = ".") -> dict[str, Any]:
                 **_file_status(gmd_archive),
                 "manifest": _manifest_summary(gmd_manifest),
             },
+            "figshare_fall29": {
+                **_file_status(fall29_archive),
+                "manifest": _manifest_summary(fall29_manifest),
+            },
         },
         "api_keys": {
             "OPENAI_API_KEY": {"present": bool(os.getenv("OPENAI_API_KEY"))},
@@ -160,16 +163,12 @@ def environment_status(root: str | Path = ".") -> dict[str, Any]:
             "grouped_reports": validation_reports,
             "threshold_lock": threshold_lock,
             "threshold_confirmation": threshold_confirmation,
-            "thresholds_frozen": bool(
-                threshold_lock and threshold_lock.get("lock_kind") == THRESHOLD_LOCK_KIND
-            ),
-            "thresholds_confirmed_on_s3": bool(
-                threshold_confirmation
-                and threshold_confirmation.get("confirmation_kind") == THRESHOLD_CONFIRMATION_KIND
-            ),
+            "thresholds_frozen": is_pending_threshold_lock(threshold_lock),
+            "thresholds_confirmed_on_group": is_threshold_confirmation(threshold_confirmation),
+            "thresholds_confirmed_on_s3": is_threshold_confirmation(threshold_confirmation),
             "locked_test_policy": (
-                "Subject 4 requires an explicit unlock after S3 confirmation and never influences "
-                "threshold selection"
+                "Declared test subjects require explicit unlock after grouped confirmation and "
+                "never influence threshold selection"
             ),
         },
     }

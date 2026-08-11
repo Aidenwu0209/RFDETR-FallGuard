@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a small predeclared threshold set before S1-S2 evaluation begins."""
+"""Generate a small threshold set before grouped development evaluation begins."""
 
 from __future__ import annotations
 
@@ -26,13 +26,19 @@ def main() -> None:
     parser.add_argument(
         "--include-expanded-precision-grid",
         action="store_true",
-        help="add the documented S1-S2 stage-2 confidence grid",
+        help="add the documented development-only confidence grid",
+    )
+    parser.add_argument(
+        "--precision-grid-only",
+        action="store_true",
+        help="emit only the predeclared 0.40-0.80 confidence grid",
     )
     args = parser.parse_args()
     try:
         candidates = generate_candidate_configs(
             load_config(args.base_config),
             include_expanded_precision_grid=args.include_expanded_precision_grid,
+            precision_grid_only=args.precision_grid_only,
         )
     except ConfigurationError as exc:
         parser.error(str(exc))
@@ -59,13 +65,18 @@ def main() -> None:
         "selection_partition": "threshold_development",
         "candidate_count": len(records),
         "development_stage": (
-            "stage2_precision_expansion_after_stage1_false_positive_diagnostic"
-            if args.include_expanded_precision_grid
-            else "stage1_initial_presets"
+            "cross_subject_precision_grid"
+            if args.precision_grid_only
+            else (
+                "stage2_precision_expansion_after_stage1_false_positive_diagnostic"
+                if args.include_expanded_precision_grid
+                else "stage1_initial_presets"
+            )
         ),
         "candidates": records,
         "warning": (
-            "candidate values are provisional until selected on S1-S2 and confirmed once on S3"
+            "candidate values are provisional until selected on development subjects and "
+            "confirmed once on an untouched validation group"
         ),
     }
     manifest_path = args.output_dir / "candidate-manifest.json"

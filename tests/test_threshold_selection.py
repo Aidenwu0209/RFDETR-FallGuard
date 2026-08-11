@@ -162,6 +162,8 @@ def test_predeclared_candidates_fill_thresholds_without_claiming_validation(
 
     expanded = generate_candidate_configs(base, include_expanded_precision_grid=True)
     assert set(expanded) == set(CANDIDATE_PRESETS) | set(EXPANDED_PRECISION_PRESETS)
+    precision_only = generate_candidate_configs(base, precision_grid_only=True)
+    assert set(precision_only) == set(EXPANDED_PRECISION_PRESETS)
 
 
 def test_selection_prefers_nano_on_exact_metric_tie_and_emits_formal_config(
@@ -253,6 +255,27 @@ def test_selection_rejects_subject_leakage_and_snapshot_parameter_drift(
         )
 
 
+def test_selection_accepts_manifest_declared_subject_groups(development_config) -> None:
+    report = grouped_report(development_config, "nano")
+    report["protocol"] = {
+        "partition_unit": "subject",
+        "threshold_development": [10, 11],
+        "threshold_validation": [12],
+        "locked_test": [13],
+    }
+    for row in report["rows"]:
+        row["subject_id"] = 10 if row["subject_id"] == 1 else 11
+
+    lock = select_thresholds(
+        [("custom-protocol.json", report)],
+        minimum_recall=1.0,
+        maximum_false_positive_clips=0,
+    )
+
+    assert lock["protocol"]["threshold_development"] == [10, 11]
+    assert lock["next_gate"]["partition"] == "threshold_validation"
+
+
 def test_s3_confirmation_requires_unchanged_parameters_and_disjoint_videos(
     development_config,
 ) -> None:
@@ -270,7 +293,7 @@ def test_s3_confirmation_requires_unchanged_parameters_and_disjoint_videos(
         maximum_false_positive_clips=0,
     )
     assert confirmation["formal_thresholds_confirmed"] is True
-    assert confirmation["confirmation_policy"]["parameters_retuned_on_s3"] is False
+    assert confirmation["confirmation_policy"]["parameters_retuned_on_validation_group"] is False
     assert confirmation["locked_test"]["status"] == "locked_pending_final_evaluation"
     validate_locked_test_confirmation(
         confirmation,

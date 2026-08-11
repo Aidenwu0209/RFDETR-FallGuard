@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run posture -> ByteTrack -> temporal -> event on a grouped GMDCSA-24 manifest."""
+"""Run posture -> ByteTrack -> temporal -> event on a subject-grouped video manifest."""
 
 from __future__ import annotations
 
@@ -84,12 +84,12 @@ def main() -> None:
     parser.add_argument(
         "--unlock-locked-test",
         action="store_true",
-        help="explicitly unlock Subject 4 only after thresholds are frozen and confirmed",
+        help="explicitly unlock the declared test subjects after grouped confirmation",
     )
     parser.add_argument(
         "--threshold-confirmation",
         type=Path,
-        help="required proof that frozen parameters passed the one-time S3 gate before S4",
+        help="proof that frozen parameters passed the one-time grouped validation gate",
     )
     parser.add_argument("--output-json", required=True, type=Path)
     args = parser.parse_args()
@@ -190,11 +190,19 @@ def main() -> None:
         "pipeline_parameters": parameters,
         "config_snapshot": config.model_dump(mode="json"),
         "protocol": manifest["protocol"],
+        "dataset": {
+            key: manifest.get(key)
+            for key in ("dataset", "version", "source", "doi", "repository_license")
+            if manifest.get(key) is not None
+        },
         "selected_video_ids": sorted(row["video_id"] for row in rows),
         "metrics_by_partition": {args.partition: clip_metrics(rows)},
-        "detection_delay_available": False,
-        "detection_delay_unavailable_reason": (
-            "GMDCSA-24 supplies clip labels but no human-confirmed fall onset timestamps"
+        "detection_delay_available": bool(
+            manifest["protocol"].get("detection_delay_available", False)
+        ),
+        "detection_delay_unavailable_reason": manifest["protocol"].get(
+            "detection_delay_unavailable_reason",
+            "the dataset manifest supplies clip labels but no fall-onset timestamps",
         ),
         "rows": rows,
         "paid_api_call_performed": False,
