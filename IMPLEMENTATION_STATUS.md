@@ -21,6 +21,7 @@ Evidence date: 2026-08-11. Runtime evidence was collected on
 | M6 detection/event/deployment evaluation and experiment recorder | VERIFIED_INTEGRATION | Official detection delegation, one-to-one event metrics, unavailable-metric reasons, mock formal rejection, warm-up reset, resource timing, and reproducibility snapshot tested |
 | M6 GMDCSA-24 grouped validation preparation | VERIFIED_INTEGRATION | Zenodo v2.0 archive MD5 verified; 160 readable videos, 4 subjects, 79 ADL/81 Fall, no duplicate hashes or subject leakage; S1-S2 development, S3 validation, S4 locked test; 16-video subset generated |
 | M6 real cascade engineering smoke | VERIFIED_INTEGRATION | Official Small `person_only` completed RF-DETR -> ByteTrack -> Temporal -> Event on one Fall and one ADL clip; both produced one unique candidate, demonstrating execution and also why person-only output is invalid for final thresholds |
+| M6 threshold candidate/freeze protocol | VERIFIED_UNIT | Four predeclared configs; report/metric/hash/subject/video/parameter integrity checks; deterministic S1-S2 selection; complete frozen config; one-time S3 confirmation; S4 requires matching confirmation, explicit unlock, and all videos |
 | M6 formal real-data threshold result | BLOCKED_EXTERNAL | Grouped full-cascade runner is implemented, but a posture checkpoint is still required; clip labels cannot support detection-delay claims without human onset timestamps |
 | M7 Gradio, docs, CLI and full QA | VERIFIED_INTEGRATION | Five-tab UI rendered in a real browser with model/GPU reports, dataset protocol, training state, and local-only key status; non-blocking HTTP 200 probe passes |
 | Continuous live camera streaming | NOT_IMPLEMENTED | UI intentionally supports uploaded/webcam-recorded finite clips and does not claim continuous real-time monitoring |
@@ -30,20 +31,20 @@ Evidence date: 2026-08-11. Runtime evidence was collected on
 
 ```text
 .venv/bin/ruff format .
-  exit 0; 93 files unchanged on the latest implementation run
+  exit 0; 98 files unchanged on the latest implementation run
 .venv/bin/ruff check .
   exit 0; all checks passed
 .venv/bin/mypy src app scripts
-  exit 0; success, 61 source files after training extras were installed
+  exit 0; success, 65 source files after training extras were installed
 .venv/bin/pytest -q
-  exit 0; 59 passed, 2 deselected, 0 failed, 0 skipped, 1 warning
+  exit 0; 70 passed, 2 deselected, 0 failed, 0 skipped, 1 warning
 .venv/bin/python -m compileall -q src app scripts tests datasets
   exit 0
 .venv/bin/python scripts/check_environment.py
   exit 0; local-only audit, network_or_paid_call_performed=false
 .venv/bin/python scripts/smoke_gradio.py
   exit 0; HTTP 200 and server closed
-15 required scripts with --help
+18 required scripts with --help
   exit 0
 ```
 

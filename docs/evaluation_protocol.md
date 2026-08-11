@@ -40,6 +40,26 @@ reported when available. The result records whether decoding, UI, and network ti
 Formal benchmarking rejects null experimental thresholds, `person_only`, missing class metadata,
 fallback, and mock components. Mock timing is labeled `MOCK_ENGINEERING_ONLY`.
 
+## Grouped threshold freeze
+
+The small cascade protocol is fixed before execution:
+
+1. Four provisional configs are generated before grouped results are inspected.
+2. Every Nano/Small candidate runs on the identical subject-isolated S1-S2 video list.
+3. `select_thresholds.py` recomputes metrics from clip rows, rejects mixed subjects, mismatched
+   manifests, different video lists, duplicate candidates, or config/report parameter drift.
+4. Candidate eligibility uses a declared minimum recall and maximum false-positive clip count.
+   Ranking then uses fewer false positives, higher F1/recall/specificity, and Nano only as an exact
+   metric tie-break. A failed gate is reported; it is never relaxed silently.
+5. The winner's detector, ByteTrack, temporal, and event parameters are frozen in a complete config.
+6. S3 is evaluated once with those exact checkpoint hashes and parameters. Confirmation rejects
+   any overlap with S1-S2 or any retuning.
+7. S4 requires the matching confirmation artifact, an explicit unlock flag, and full-subject
+   evaluation. S4 never participates in model or threshold selection.
+
+This produces confirmed internal thresholds, not a generalization or deployment claim. GMDCSA-24
+clip labels still cannot support detection delay without human-confirmed onset timestamps.
+
 Warm-up frames are consumed before measurement and all stage collectors are reset at the
 measurement boundary. `event_trigger_video_time` is elapsed video time from event start to alert
 decision; it is deliberately not mislabeled as wall-clock compute latency. Per-stage throughput

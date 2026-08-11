@@ -98,7 +98,7 @@ profile accepted by the training gate:
 ```bash
 python scripts/prepare_fallen_person.py \
   --dataset-dir data/raw/fallen-person \
-  --output-dir data/processed/fallen-person-audit
+  --output-dir data/processed/fallen-person
 ```
 
 Detector training prints its resolved official parameter names by default and performs training
@@ -107,8 +107,8 @@ only with `--execute`. Nano and Small use the same audited class mapping and dat
 ```bash
 python scripts/train_detector.py \
   --dataset-dir data/raw/fallen-person \
-  --dataset-audit data/processed/fallen-person-audit/audit.json \
-  --config data/processed/fallen-person-audit/posture_profile.yaml \
+  --dataset-audit data/processed/fallen-person/audit.json \
+  --config data/processed/fallen-person/posture_profile.yaml \
   --weights weights/official/rf-detr-nano.pth \
   --model-variant nano \
   --output-dir checkpoints/nano \
@@ -116,8 +116,8 @@ python scripts/train_detector.py \
 
 python scripts/train_detector.py \
   --dataset-dir data/raw/fallen-person \
-  --dataset-audit data/processed/fallen-person-audit/audit.json \
-  --config data/processed/fallen-person-audit/posture_profile.yaml \
+  --dataset-audit data/processed/fallen-person/audit.json \
+  --config data/processed/fallen-person/posture_profile.yaml \
   --weights weights/official/rf-detr-small.pth \
   --model-variant small \
   --output-dir checkpoints/small \
@@ -142,20 +142,67 @@ python scripts/prepare_gmdcsa24.py \
   --output-dir data/processed/gmdcsa24
 ```
 
-The resulting grouped runner requires an actual posture checkpoint and a config whose class order
-matches checkpoint metadata. Use S1-S2 only for candidate threshold selection, use S3 once for
-confirmation, and keep S4 locked until the final comparison. It reports clip-level metrics only:
+The grouped runner requires an actual posture checkpoint and a config whose class order matches
+checkpoint metadata. Generate the four provisional candidates before looking at grouped results:
+
+```bash
+python scripts/generate_threshold_candidates.py \
+  --base-config data/processed/fallen-person/posture_profile.yaml \
+  --output-dir artifacts/validation/candidates
+```
+
+Run every generated candidate against the same deterministic S1-S2 subset for both Nano and
+Small. The example below shows one of the eight runs; change only the candidate, variant, weights,
+and output filename:
 
 ```bash
 python scripts/validate_grouped_pipeline.py \
-  --config configs/profiles/posture-validated.yaml \
+  --config artifacts/validation/candidates/high_recall.yaml \
   --manifest data/processed/gmdcsa24/manifest.json \
   --dataset-root data/raw/gmdcsa24/extracted/REPOSITORY_ROOT \
   --weights checkpoints/nano/checkpoint_best_total.pth \
   --model-variant nano \
-  --partition threshold_validation \
-  --output-json artifacts/validation/nano-s3.json
+  --partition threshold_development \
+  --output-json artifacts/validation/development/nano-high_recall.json
 ```
+
+Freeze one candidate using S1-S2 only. Supply every development report with a repeated
+`--development-report`; the strict defaults require recall 1.0 and zero false-positive clips and
+will fail rather than silently relax the gate:
+
+```bash
+python scripts/select_thresholds.py \
+  --development-report artifacts/validation/development/nano-high_recall.json \
+  --development-report artifacts/validation/development/nano-balanced_short.json \
+  --development-report artifacts/validation/development/nano-balanced_duration.json \
+  --development-report artifacts/validation/development/nano-high_precision.json \
+  --development-report artifacts/validation/development/small-high_recall.json \
+  --development-report artifacts/validation/development/small-balanced_short.json \
+  --development-report artifacts/validation/development/small-balanced_duration.json \
+  --development-report artifacts/validation/development/small-high_precision.json \
+  --output-lock artifacts/validation/threshold-lock.json \
+  --output-config artifacts/validation/frozen-profile.yaml
+```
+
+Run the frozen winner once on S3, then confirm without retuning:
+
+```bash
+python scripts/validate_grouped_pipeline.py \
+  --config artifacts/validation/frozen-profile.yaml \
+  --manifest data/processed/gmdcsa24/manifest.json \
+  --dataset-root data/raw/gmdcsa24/extracted/REPOSITORY_ROOT \
+  --partition threshold_validation \
+  --output-json artifacts/validation/frozen-s3.json
+
+python scripts/confirm_thresholds.py \
+  --threshold-lock artifacts/validation/threshold-lock.json \
+  --validation-report artifacts/validation/frozen-s3.json \
+  --output-json artifacts/validation/threshold-confirmation.json
+```
+
+S4 remains inaccessible without the explicit unlock flag, the matching S3 confirmation artifact,
+and `--all-videos`. Grouped reports contain clip-level metrics only; no detection-delay claim is
+made without human-confirmed onset timestamps.
 
 Detection AP is delegated to official RF-DETR evaluation. Event matching is available through
 `fallguard.evaluation.event` and requires explicit temporal thresholds. The experiment profile
@@ -210,6 +257,9 @@ python scripts/track_video.py --help
 python scripts/run_pipeline.py --help
 python scripts/train_detector.py --help
 python scripts/prepare_fallen_person.py --help
+python scripts/generate_threshold_candidates.py --help
+python scripts/select_thresholds.py --help
+python scripts/confirm_thresholds.py --help
 python scripts/evaluate_detector.py --help
 python scripts/benchmark.py --help
 python scripts/train_semantic_adapter.py --help

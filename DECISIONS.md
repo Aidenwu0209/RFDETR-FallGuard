@@ -105,3 +105,12 @@ architecture mismatch. One-epoch synthetic GPU runs for both variants proved tra
 serialization, safe reload, and inference mechanics only. RF-DETR 1.9.1 omits query-layout fields
 from these best-total checkpoint args, so the generic reload warning is retained; both smoke
 checkpoints were separately verified to carry the expected default 300 x 13 query rows.
+
+## D-017: threshold freeze and locked-test gate
+
+Four candidate configurations are declared before grouped evaluation. Nano and Small candidates
+must use the same S1-S2 video IDs and manifest. Selection recomputes clip metrics and rejects
+subject leakage, mixed partitions, parameter/config drift, duplicate candidates, and silently
+relaxed quality gates. The selected full pipeline config is frozen before one S3 pass. S4 requires
+the matching S3 confirmation artifact, an explicit unlock, and all Subject 4 videos; it cannot
+influence checkpoint or threshold selection.

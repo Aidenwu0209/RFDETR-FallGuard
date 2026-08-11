@@ -4,88 +4,110 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
-from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from fallguard.config import load_config
+from fallguard.config import AppConfig, load_config
 from fallguard.detection.rfdetr_adapter import RFDETRDetector
+from fallguard.exceptions import ConfigurationError
 from fallguard.factory import build_pipeline
 from fallguard.session import make_session_id
+from fallguard.threshold_selection import (
+    clip_metrics,
+    file_sha256,
+    read_json_object,
+    validate_locked_test_confirmation,
+)
 from fallguard.video import VideoReader
 
 
-def file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def metrics(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    tp = sum(row["expected_fall"] and row["predicted_fall"] for row in rows)
-    fp = sum(not row["expected_fall"] and row["predicted_fall"] for row in rows)
-    fn = sum(row["expected_fall"] and not row["predicted_fall"] for row in rows)
-    tn = sum(not row["expected_fall"] and not row["predicted_fall"] for row in rows)
-    precision = tp / (tp + fp) if tp + fp else None
-    recall = tp / (tp + fn) if tp + fn else None
-    specificity = tn / (tn + fp) if tn + fp else None
-    f1 = (
-        2 * precision * recall / (precision + recall)
-        if precision is not None and recall is not None and precision + recall > 0
-        else None
-    )
+def pipeline_parameters(config: AppConfig) -> dict[str, Any]:
     return {
-        "clips": len(rows),
-        "true_positive_clips": tp,
-        "false_positive_clips": fp,
-        "false_negative_clips": fn,
-        "true_negative_clips": tn,
-        "precision": precision,
-        "recall": recall,
-        "specificity": specificity,
-        "f1": f1,
+        "detector": {
+            "confidence_threshold": config.detector.confidence_threshold,
+            "class_names": config.detector.class_names,
+            "posture_groups": config.detector.posture_groups,
+        },
+        "tracking": config.tracking.model_dump(mode="json"),
+        "temporal": config.temporal.model_dump(mode="json"),
+        "event": config.event.model_dump(mode="json"),
     }
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", required=True)
+    parser.add_argument("--config", required=True, type=Path)
     parser.add_argument("--manifest", required=True, type=Path)
     parser.add_argument("--dataset-root", required=True, type=Path)
-    parser.add_argument("--weights", required=True, type=Path)
-    parser.add_argument("--model-variant", required=True, choices=("nano", "small"))
+    parser.add_argument("--weights", type=Path)
+    parser.add_argument("--model-variant", choices=("nano", "small"))
     parser.add_argument(
-        "--partition", choices=("threshold_development", "threshold_validation", "locked_test")
+        "--partition",
+        required=True,
+        choices=("threshold_development", "threshold_validation", "locked_test"),
     )
     parser.add_argument("--all-videos", action="store_true")
+    parser.add_argument(
+        "--unlock-locked-test",
+        action="store_true",
+        help="explicitly unlock Subject 4 only after thresholds are frozen and confirmed",
+    )
+    parser.add_argument(
+        "--threshold-confirmation",
+        type=Path,
+        help="required proof that frozen parameters passed the one-time S3 gate before S4",
+    )
     parser.add_argument("--output-json", required=True, type=Path)
     args = parser.parse_args()
+    if args.partition == "locked_test":
+        if not args.unlock_locked_test or args.threshold_confirmation is None:
+            parser.error("locked_test requires --unlock-locked-test and --threshold-confirmation")
+        if not args.all_videos:
+            parser.error("locked_test final evaluation requires --all-videos")
     config = load_config(args.config)
     if config.detector.mode.value != "posture_multiclass":
         parser.error("config detector.mode must be posture_multiclass")
     if not config.detector.class_names:
         parser.error("config detector.class_names must match checkpoint metadata")
+    weights = args.weights or config.detector.weights_path
+    if weights is None:
+        parser.error("weights are required via --weights or config detector.weights_path")
+    weights = Path(weights).resolve()
+    model_variant = args.model_variant or config.detector.model_variant
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
     records = manifest.get("records", [])
     selected = [
         record
         for record in records
         if (args.all_videos or record.get("small_validation_subset"))
-        and (args.partition is None or record.get("partition") == args.partition)
+        and record.get("partition") == args.partition
     ]
     if not selected:
         parser.error("no manifest videos matched the requested subset/partition")
     config.detector = config.detector.model_copy(
         update={
-            "model_variant": args.model_variant,
-            "weights_path": args.weights,
+            "model_variant": model_variant,
+            "weights_path": weights,
             "allow_weight_download": False,
         }
     )
+    parameters = pipeline_parameters(config)
+    weights_sha256 = file_sha256(weights)
+    manifest_sha256 = file_sha256(args.manifest)
+    if args.partition == "locked_test":
+        assert args.threshold_confirmation is not None
+        try:
+            validate_locked_test_confirmation(
+                read_json_object(args.threshold_confirmation),
+                manifest_sha256=manifest_sha256,
+                protocol=manifest["protocol"],
+                model_variant=model_variant,
+                weights_sha256=weights_sha256,
+                pipeline_parameters=parameters,
+            )
+        except ConfigurationError as exc:
+            parser.error(str(exc))
     rows: list[dict[str, Any]] = []
     detector = RFDETRDetector(config.detector, device=config.runtime.device)
     detector.load()
@@ -119,21 +141,21 @@ def main() -> None:
             }
         )
     detector.close()
-    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for row in rows:
-        grouped[row["partition"]].append(row)
     report = {
         "validation_kind": "GROUPED_CLIP_LEVEL_INTERNAL_VALIDATION",
         "formal_generalization_claim": False,
-        "weights_sha256": file_sha256(args.weights),
-        "model_variant": args.model_variant,
-        "thresholds": {
-            "confidence_threshold": config.detector.confidence_threshold,
-            **config.temporal.model_dump(mode="json"),
-            **config.tracking.model_dump(mode="json"),
-        },
+        "partition": args.partition,
+        "subset": "all_videos" if args.all_videos else "deterministic_small_subset",
+        "weights_sha256": weights_sha256,
+        "weights_path": str(weights),
+        "config_sha256": file_sha256(args.config),
+        "manifest_sha256": manifest_sha256,
+        "model_variant": model_variant,
+        "pipeline_parameters": parameters,
+        "config_snapshot": config.model_dump(mode="json"),
         "protocol": manifest["protocol"],
-        "metrics_by_partition": {key: metrics(value) for key, value in grouped.items()},
+        "selected_video_ids": sorted(row["video_id"] for row in rows),
+        "metrics_by_partition": {args.partition: clip_metrics(rows)},
         "detection_delay_available": False,
         "detection_delay_unavailable_reason": (
             "GMDCSA-24 supplies clip labels but no human-confirmed fall onset timestamps"

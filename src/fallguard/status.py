@@ -8,6 +8,11 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 
+from fallguard.threshold_selection import (
+    THRESHOLD_CONFIRMATION_KIND,
+    THRESHOLD_LOCK_KIND,
+)
+
 
 def _package_version(name: str) -> str | None:
     try:
@@ -116,9 +121,15 @@ def environment_status(root: str | Path = ".") -> dict[str, Any]:
     gmd_manifest = project_root / "data/processed/gmdcsa24/manifest.json"
     fallen_root = project_root / "data/raw/fallen-person"
     fallen_audit = project_root / "data/processed/fallen-person/audit.json"
+    validation_dir = project_root / "artifacts/validation"
     validation_reports = [
-        str(path) for path in sorted((project_root / "artifacts/validation").glob("*.json"))
+        str(path)
+        for path in sorted(validation_dir.glob("*.json"))
+        if (_read_json(path) or {}).get("validation_kind")
+        == "GROUPED_CLIP_LEVEL_INTERNAL_VALIDATION"
     ]
+    threshold_lock = _read_json(validation_dir / "threshold-lock.json")
+    threshold_confirmation = _read_json(validation_dir / "threshold-confirmation.json")
     return {
         "packages": {
             name: _package_version(name)
@@ -147,7 +158,18 @@ def environment_status(root: str | Path = ".") -> dict[str, Any]:
         },
         "validation": {
             "grouped_reports": validation_reports,
-            "thresholds_frozen": bool(validation_reports),
-            "locked_test_policy": "Subject 4 must remain unopened until thresholds are frozen",
+            "threshold_lock": threshold_lock,
+            "threshold_confirmation": threshold_confirmation,
+            "thresholds_frozen": bool(
+                threshold_lock and threshold_lock.get("lock_kind") == THRESHOLD_LOCK_KIND
+            ),
+            "thresholds_confirmed_on_s3": bool(
+                threshold_confirmation
+                and threshold_confirmation.get("confirmation_kind") == THRESHOLD_CONFIRMATION_KIND
+            ),
+            "locked_test_policy": (
+                "Subject 4 requires an explicit unlock after S3 confirmation and never influences "
+                "threshold selection"
+            ),
         },
     }
