@@ -25,6 +25,13 @@ class FakeMismatchedCheckpointFactory(FakeCheckpointFactory):
     class_names = ("fallen", "standing", "sitting", "lying")
 
 
+class FakeTrainingFactory:
+    init_call: dict[str, object] | None = None
+
+    def __init__(self, **kwargs: object) -> None:
+        type(self).init_call = kwargs
+
+
 def metadata(frame_id: int = 0) -> FrameMetadata:
     return FrameMetadata(
         frame_id=frame_id,
@@ -152,3 +159,27 @@ def test_posture_checkpoint_rejects_class_order_mismatch(
 
     with pytest.raises(ConfigurationError, match="class_names differ"):
         detector.load()
+
+
+def test_training_load_uses_pretrained_factory_not_checkpoint_metadata(
+    development_config, tmp_path, monkeypatch
+) -> None:
+    official_weights = tmp_path / "rf-detr-nano.pth"
+    official_weights.touch()
+    config = development_config.detector.model_copy(
+        update={
+            "mode": DetectionMode.POSTURE_MULTICLASS,
+            "weights_path": official_weights,
+            "class_names": {0: "fallen", 1: "lying", 2: "sitting", 3: "standing"},
+        }
+    )
+    detector = RFDETRDetector(config, device="cuda:0")
+    monkeypatch.setattr(detector, "_official_factory", lambda: FakeTrainingFactory)
+
+    detector.load_for_training()
+
+    assert isinstance(detector._model, FakeTrainingFactory)
+    assert FakeTrainingFactory.init_call == {
+        "device": "cuda:0",
+        "pretrain_weights": str(official_weights),
+    }

@@ -102,7 +102,7 @@ def main() -> None:
         )
     )
     if args.execute:
-        detector.load()
+        detector.load_for_training()
         detector.train(**resolved)
 
 

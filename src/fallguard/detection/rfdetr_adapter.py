@@ -103,6 +103,31 @@ class RFDETRDetector:
             kwargs["pretrain_weights"] = str(self.config.weights_path)
         self._model = factory(**kwargs)
 
+    def load_for_training(self) -> None:
+        """Load official pretrained weights without treating them as a tuned checkpoint."""
+
+        if self.loaded:
+            return
+        if self.config.weights_path is not None and not self.config.weights_path.is_file():
+            raise ModelUnavailableError(f"RF-DETR weights do not exist: {self.config.weights_path}")
+        if self.config.weights_path is None and not self.config.allow_weight_download:
+            raise ModelUnavailableError(
+                "no weights_path was provided and implicit official-weight download is disabled"
+            )
+        class_ids = sorted(self.config.class_names)
+        if class_ids != list(range(len(class_ids))):
+            raise ConfigurationError(
+                "training class_names IDs must be contiguous and start at zero"
+            )
+
+        factory = self._model_factory or self._official_factory()
+        kwargs: dict[str, Any] = {}
+        if self.device != "auto":
+            kwargs["device"] = self.device
+        if self.config.weights_path is not None:
+            kwargs["pretrain_weights"] = str(self.config.weights_path)
+        self._model = factory(**kwargs)
+
     def _official_factory(self) -> type[Any]:
         try:
             installed = version("rfdetr")
