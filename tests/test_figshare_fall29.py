@@ -69,6 +69,8 @@ def test_manifest_preserves_subject_groups_and_excludes_auxiliary_videos(
     }
     assert manifest["audit"]["subject_leakage"] is False
     assert manifest["audit"]["auxiliary_videos_excluded"] == ["Fall/timelapse_20x.mp4"]
+    assert all("\\" not in record["relative_path"] for record in records)
+    assert all("\\" not in record["video_id"] for record in records)
     assert manifest["audit"]["source_subject_videos"] == 85
     assert len(manifest["audit"]["duplicate_videos_excluded"]) == 1
     assert manifest["audit"]["duplicate_content_hashes"] == []

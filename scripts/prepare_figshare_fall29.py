@@ -99,9 +99,10 @@ def build_manifest(root: Path, per_subject_label: int) -> dict[str, Any]:
     for label_dir, label in (("ADL", "adl"), ("Fall", "fall")):
         for video in sorted((root / label_dir).rglob("*.mp4")):
             relative = video.relative_to(root)
+            relative_posix = relative.as_posix()
             parsed = _subject_and_location(relative)
             if parsed is None:
-                auxiliary_videos.append(str(relative))
+                auxiliary_videos.append(relative_posix)
                 continue
             subject_id, location_id = parsed
             partition = SUBJECT_PARTITIONS.get(subject_id)
@@ -114,8 +115,8 @@ def build_manifest(root: Path, per_subject_label: int) -> dict[str, Any]:
                     "label": label,
                     "partition": partition,
                     "small_validation_subset": False,
-                    "video_id": f"fall29/{relative.with_suffix('')}",
-                    "relative_path": str(relative),
+                    "video_id": f"fall29/{relative.with_suffix('').as_posix()}",
+                    "relative_path": relative_posix,
                     "bytes": video.stat().st_size,
                     "sha256": digest(video, "sha256"),
                     **video_metadata(video),
