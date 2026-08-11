@@ -15,6 +15,7 @@ from fallguard.exceptions import ConfigurationError
 from fallguard.schemas import DetectionMode
 from fallguard.threshold_selection import (
     CANDIDATE_PRESETS,
+    EXPANDED_PRECISION_PRESETS,
     clip_metrics,
     confirm_thresholds,
     frozen_config_from_lock,
@@ -111,6 +112,7 @@ def grouped_report(
     return {
         "validation_kind": "GROUPED_CLIP_LEVEL_INTERNAL_VALIDATION",
         "formal_generalization_claim": False,
+        "implementation_git_commit": "e" * 40,
         "partition": partition,
         "subset": "deterministic_small_subset",
         "weights_sha256": ("a" if variant == "nano" else "b") * 64,
@@ -156,6 +158,9 @@ def test_predeclared_candidates_fill_thresholds_without_claiming_validation(
         assert candidate.benchmark.formal is False
         candidate.benchmark.formal = True
         candidate.assert_formal_ready()
+
+    expanded = generate_candidate_configs(base, include_expanded_precision_grid=True)
+    assert set(expanded) == set(CANDIDATE_PRESETS) | set(EXPANDED_PRECISION_PRESETS)
 
 
 def test_selection_prefers_nano_on_exact_metric_tie_and_emits_formal_config(
@@ -255,6 +260,7 @@ def test_s3_confirmation_requires_unchanged_parameters_and_disjoint_videos(
         model_variant=validation["model_variant"],
         weights_sha256=validation["weights_sha256"],
         pipeline_parameters=validation["pipeline_parameters"],
+        implementation_git_commit=validation["implementation_git_commit"],
     )
 
     changed = deepcopy(validation)
@@ -286,6 +292,7 @@ def test_s3_confirmation_requires_unchanged_parameters_and_disjoint_videos(
             model_variant="small",
             weights_sha256=validation["weights_sha256"],
             pipeline_parameters=validation["pipeline_parameters"],
+            implementation_git_commit=validation["implementation_git_commit"],
         )
 
 

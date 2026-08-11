@@ -22,6 +22,7 @@ GROUPED_REPORT_KIND = "GROUPED_CLIP_LEVEL_INTERNAL_VALIDATION"
 THRESHOLD_LOCK_KIND = "THRESHOLD_LOCK_PENDING_S3_CONFIRMATION"
 THRESHOLD_CONFIRMATION_KIND = "THRESHOLD_LOCK_CONFIRMED_ON_S3"
 SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
+GIT_COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}")
 CANDIDATE_PRESETS: dict[str, dict[str, dict[str, int | float]]] = {
     "high_recall": {
         "detector": {"confidence_threshold": 0.18},
@@ -76,6 +77,19 @@ CANDIDATE_PRESETS: dict[str, dict[str, dict[str, int | float]]] = {
         },
     },
 }
+EXPANDED_PRECISION_PRESETS: dict[str, dict[str, dict[str, int | float]]] = {
+    name: {
+        "detector": {"confidence_threshold": confidence},
+        "tracking": {"track_activation_threshold": confidence},
+        "temporal": dict(CANDIDATE_PRESETS["high_precision"]["temporal"]),
+    }
+    for name, confidence in (
+        ("precision_060", 0.60),
+        ("precision_070", 0.70),
+        ("precision_075", 0.75),
+        ("precision_080", 0.80),
+    )
+}
 
 
 def file_sha256(path: str | Path) -> str:
@@ -104,13 +118,18 @@ def read_json_object(path: str | Path) -> dict[str, Any]:
     return value
 
 
-def generate_candidate_configs(base_config: AppConfig) -> dict[str, dict[str, Any]]:
+def generate_candidate_configs(
+    base_config: AppConfig, *, include_expanded_precision_grid: bool = False
+) -> dict[str, dict[str, Any]]:
     if base_config.detector.mode.value != "posture_multiclass":
         raise ConfigurationError("threshold candidates require posture_multiclass mode")
     if not base_config.detector.class_names:
         raise ConfigurationError("threshold candidates require audited posture class names")
     generated: dict[str, dict[str, Any]] = {}
-    for name, updates in CANDIDATE_PRESETS.items():
+    presets = dict(CANDIDATE_PRESETS)
+    if include_expanded_precision_grid:
+        presets.update(EXPANDED_PRECISION_PRESETS)
+    for name, updates in presets.items():
         candidate = base_config.model_copy(deep=True)
         candidate.runtime.profile = "experiment"
         candidate.detector = candidate.detector.model_copy(update=updates["detector"])
@@ -171,7 +190,7 @@ def _metrics_equal(observed: dict[str, Any], expected: dict[str, int | float | N
     for key, expected_value in expected.items():
         observed_value = observed[key]
         if isinstance(expected_value, float):
-            if not isinstance(observed_value, (int, float)) or not math.isclose(
+            if not isinstance(observed_value, int | float) or not math.isclose(
                 float(observed_value), expected_value, rel_tol=1e-12, abs_tol=1e-12
             ):
                 return False
@@ -183,6 +202,12 @@ def _metrics_equal(observed: dict[str, Any], expected: dict[str, int | float | N
 def validate_grouped_report(report: dict[str, Any], *, expected_partition: str) -> dict[str, Any]:
     if report.get("validation_kind") != GROUPED_REPORT_KIND:
         raise ConfigurationError("not a grouped clip-level validation report")
+    implementation_revision = report.get("implementation_git_commit")
+    if (
+        not isinstance(implementation_revision, str)
+        or GIT_COMMIT_PATTERN.fullmatch(implementation_revision) is None
+    ):
+        raise ConfigurationError("grouped report has no valid implementation Git commit")
     if report.get("partition") != expected_partition:
         raise ConfigurationError(
             f"report partition must be {expected_partition}, got {report.get('partition')}"
@@ -288,6 +313,7 @@ def validate_grouped_report(report: dict[str, Any], *, expected_partition: str) 
         "video_ids": sorted(video_ids),
         "metrics": computed_metrics,
         "model_variant": model_variant,
+        "implementation_git_commit": implementation_revision,
     }
 
 
@@ -334,6 +360,7 @@ def select_thresholds(
             {
                 "weights_sha256": report["weights_sha256"],
                 "model_variant": report["model_variant"],
+                "implementation_git_commit": report["implementation_git_commit"],
                 "pipeline_parameters": report["pipeline_parameters"],
             }
         )
@@ -347,6 +374,8 @@ def select_thresholds(
             raise ConfigurationError("candidate reports use different dataset manifests")
         if report["protocol"] != reference["protocol"]:
             raise ConfigurationError("candidate reports use different grouped protocols")
+        if report["implementation_git_commit"] != reference["implementation_git_commit"]:
+            raise ConfigurationError("candidate reports use different implementation revisions")
         if item["video_ids"] != reference_video_ids:
             raise ConfigurationError(
                 "candidate reports do not evaluate the same development videos"
@@ -384,6 +413,7 @@ def select_thresholds(
             ],
         },
         "manifest_sha256": reference["manifest_sha256"],
+        "implementation_git_commit": reference["implementation_git_commit"],
         "protocol": deepcopy(reference["protocol"]),
         "development_video_ids": reference_video_ids,
         "candidate_count": len(validated),
@@ -403,6 +433,7 @@ def select_thresholds(
             "report_sha256": selected["report_sha256"],
             "candidate_id": selected["candidate_id"],
             "model_variant": selected_report["model_variant"],
+            "implementation_git_commit": selected_report["implementation_git_commit"],
             "weights_path": selected_report["weights_path"],
             "weights_sha256": selected_report["weights_sha256"],
             "config_sha256": selected_report["config_sha256"],
@@ -476,7 +507,7 @@ def confirm_thresholds(
     if not isinstance(selected, dict):
         raise ConfigurationError("threshold lock has no selected candidate")
     validated = validate_grouped_report(validation_report, expected_partition=VALIDATION_PARTITION)
-    for field in ("manifest_sha256", "protocol"):
+    for field in ("manifest_sha256", "protocol", "implementation_git_commit"):
         if validation_report[field] != lock.get(field):
             raise ConfigurationError(f"S3 report {field} differs from the threshold lock")
     for field in ("model_variant", "weights_sha256", "pipeline_parameters"):
@@ -513,6 +544,7 @@ def confirm_thresholds(
             for key in (
                 "candidate_id",
                 "model_variant",
+                "implementation_git_commit",
                 "weights_path",
                 "weights_sha256",
                 "pipeline_parameters",
@@ -541,6 +573,7 @@ def validate_locked_test_confirmation(
     model_variant: str,
     weights_sha256: str,
     pipeline_parameters: dict[str, Any],
+    implementation_git_commit: str,
 ) -> None:
     if confirmation.get("confirmation_kind") != THRESHOLD_CONFIRMATION_KIND:
         raise ConfigurationError("not an accepted S3 confirmation artifact")
@@ -551,6 +584,8 @@ def validate_locked_test_confirmation(
         raise ConfigurationError("S3 confirmation uses a different GMDCSA-24 manifest")
     if confirmation.get("protocol") != protocol:
         raise ConfigurationError("S3 confirmation uses a different grouped protocol")
+    if selected.get("implementation_git_commit") != implementation_git_commit:
+        raise ConfigurationError("locked-test implementation differs from the S3 confirmation")
     if (
         selected.get("model_variant") != model_variant
         or selected.get("weights_sha256") != weights_sha256

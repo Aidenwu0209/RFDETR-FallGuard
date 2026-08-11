@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +22,22 @@ from fallguard.threshold_selection import (
     validate_locked_test_confirmation,
 )
 from fallguard.video import VideoReader
+
+GIT_COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}")
+
+
+def implementation_git_commit() -> str:
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    revision = result.stdout.strip().lower()
+    if result.returncode != 0 or GIT_COMMIT_PATTERN.fullmatch(revision) is None:
+        raise ConfigurationError("cannot resolve a valid implementation Git commit")
+    return revision
 
 
 def pipeline_parameters(config: AppConfig) -> dict[str, Any]:
@@ -105,6 +123,7 @@ def main() -> None:
                 model_variant=model_variant,
                 weights_sha256=weights_sha256,
                 pipeline_parameters=parameters,
+                implementation_git_commit=implementation_git_commit(),
             )
         except ConfigurationError as exc:
             parser.error(str(exc))
@@ -144,6 +163,7 @@ def main() -> None:
     report = {
         "validation_kind": "GROUPED_CLIP_LEVEL_INTERNAL_VALIDATION",
         "formal_generalization_claim": False,
+        "implementation_git_commit": implementation_git_commit(),
         "partition": args.partition,
         "subset": "all_videos" if args.all_videos else "deterministic_small_subset",
         "weights_sha256": weights_sha256,
