@@ -4,7 +4,7 @@
 |---|---|---|
 | Project license | BLOCKED_EXTERNAL | User must explicitly choose a license before a `LICENSE` file is added |
 | Fallen Person COCO export | BLOCKED_EXTERNAL | Sign in to Roboflow in the prepared Chrome tab or securely configure `ROBOFLOW_API_KEY`; never paste credentials into logs/chat |
-| Posture-multiclass validation | BLOCKED_EXTERNAL | Run the authorized short Nano/Small fine-tuning after the COCO export and audit its exact class order |
+| Posture-multiclass validation | BLOCKED_EXTERNAL | After export, run the audit/hash gate and authorized short Nano/Small real-data fine-tuning; synthetic checkpoint reload is mechanics-only evidence |
 | Final temporal thresholds | BLOCKED_EXTERNAL | Run the grouped cascade with the posture checkpoints; freeze on S1-S2, validate once on S3, and keep S4 locked |
 | Detection delay | BLOCKED_EXTERNAL | Human-confirmed fall-onset timestamps; GMDCSA-24 provides clip labels only |
 | Local Qwen integration | BLOCKED_EXTERNAL | Explicit model selection/path, compatible dependencies, and enough GPU memory |

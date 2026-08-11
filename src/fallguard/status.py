@@ -61,6 +61,30 @@ def _manifest_summary(path: Path) -> dict[str, Any] | None:
     }
 
 
+def _fallen_audit_summary(path: Path) -> dict[str, Any] | None:
+    audit = _read_json(path)
+    if audit is None:
+        return None
+    return {
+        key: audit.get(key)
+        for key in (
+            "dataset",
+            "version",
+            "declared_license",
+            "rfdetr_contiguous_class_names",
+            "splits",
+            "images_total",
+            "cross_split_exact_duplicates",
+            "cross_split_near_duplicate_pair_count",
+            "structure_and_labels_valid",
+            "training_ready",
+            "formal_original_split_evaluation_eligible",
+            "group_isolation",
+            "semantic_mapping",
+        )
+    }
+
+
 def environment_status(root: str | Path = ".") -> dict[str, Any]:
     project_root = Path(root)
     cuda: dict[str, Any] = {"available": False}
@@ -83,21 +107,31 @@ def environment_status(root: str | Path = ".") -> dict[str, Any]:
             **_file_status(weights),
             "smoke_report": _read_json(report_path),
         }
+    fine_tuned = [
+        _file_status(path)
+        for pattern in ("artifacts/rfdetr-training/**/*.pth", "checkpoints/**/*.pth")
+        for path in sorted(project_root.glob(pattern))
+    ]
     gmd_archive = project_root / "data/raw/gmdcsa24/GMDCSA24-v2.0.zip"
     gmd_manifest = project_root / "data/processed/gmdcsa24/manifest.json"
     fallen_root = project_root / "data/raw/fallen-person"
+    fallen_audit = project_root / "data/processed/fallen-person/audit.json"
+    validation_reports = [
+        str(path) for path in sorted((project_root / "artifacts/validation").glob("*.json"))
+    ]
     return {
         "packages": {
             name: _package_version(name)
             for name in ("rfdetr", "torch", "torchvision", "gradio", "supervision")
         },
         "cuda": cuda,
-        "models": official,
+        "models": {"official": official, "fine_tuned_checkpoints": fine_tuned},
         "datasets": {
             "fallen_person": {
                 "present": fallen_root.is_dir(),
                 "path": str(fallen_root),
                 "download_requires_roboflow_login_or_key": not fallen_root.is_dir(),
+                "audit": _fallen_audit_summary(fallen_audit),
             },
             "gmdcsa24": {
                 **_file_status(gmd_archive),
@@ -110,5 +144,10 @@ def environment_status(root: str | Path = ".") -> dict[str, Any]:
             "ROBOFLOW_API_KEY": {"present": bool(os.getenv("ROBOFLOW_API_KEY"))},
             "validation_scope": "local presence/config only",
             "network_or_paid_call_performed": False,
+        },
+        "validation": {
+            "grouped_reports": validation_reports,
+            "thresholds_frozen": bool(validation_reports),
+            "locked_test_policy": "Subject 4 must remain unopened until thresholds are frozen",
         },
     }

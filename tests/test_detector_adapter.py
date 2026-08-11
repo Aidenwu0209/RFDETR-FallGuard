@@ -4,11 +4,25 @@ import numpy as np
 import pytest
 
 from fallguard.detection.rfdetr_adapter import RFDETRDetector
-from fallguard.exceptions import UnsupportedConfigurationError
-from fallguard.schemas import FrameMetadata
+from fallguard.exceptions import ConfigurationError, UnsupportedConfigurationError
+from fallguard.schemas import DetectionMode, FrameMetadata
 from tests.fakes.detector import FakeRFDETRModel
 
 pytestmark = pytest.mark.unit
+
+
+class FakeCheckpointFactory:
+    checkpoint_call: tuple[str, dict[str, object]] | None = None
+    class_names = ("standing", "fallen", "sitting", "lying")
+
+    @classmethod
+    def from_checkpoint(cls, path: str, **kwargs: object) -> FakeCheckpointFactory:
+        cls.checkpoint_call = (path, kwargs)
+        return cls()
+
+
+class FakeMismatchedCheckpointFactory(FakeCheckpointFactory):
+    class_names = ("fallen", "standing", "sitting", "lying")
 
 
 def metadata(frame_id: int = 0) -> FrameMetadata:
@@ -76,3 +90,65 @@ def test_detection_evaluation_is_delegated_to_official_model(development_config,
         "delegated": True,
         "kwargs": {"dataset_dir": str(tmp_path), "split": "test"},
     }
+
+
+def test_posture_checkpoint_uses_official_checkpoint_loader(
+    development_config, tmp_path, monkeypatch
+) -> None:
+    checkpoint = tmp_path / "checkpoint_best_total.pth"
+    checkpoint.touch()
+    config = development_config.detector.model_copy(
+        update={
+            "mode": DetectionMode.POSTURE_MULTICLASS,
+            "weights_path": checkpoint,
+            "class_names": {0: "standing", 1: "fallen", 2: "sitting", 3: "lying"},
+        }
+    )
+    detector = RFDETRDetector(config, device="cuda:0")
+    monkeypatch.setattr(detector, "_official_factory", lambda: FakeCheckpointFactory)
+
+    detector.load()
+
+    assert isinstance(detector._model, FakeCheckpointFactory)
+    assert FakeCheckpointFactory.checkpoint_call == (
+        str(checkpoint),
+        {"num_classes": 4, "device": "cuda:0"},
+    )
+
+
+def test_posture_checkpoint_rejects_non_contiguous_class_ids(
+    development_config, tmp_path, monkeypatch
+) -> None:
+    checkpoint = tmp_path / "checkpoint_best_total.pth"
+    checkpoint.touch()
+    config = development_config.detector.model_copy(
+        update={
+            "mode": DetectionMode.POSTURE_MULTICLASS,
+            "weights_path": checkpoint,
+            "class_names": {0: "standing", 2: "fallen"},
+        }
+    )
+    detector = RFDETRDetector(config)
+    monkeypatch.setattr(detector, "_official_factory", lambda: FakeCheckpointFactory)
+
+    with pytest.raises(ConfigurationError, match="contiguous"):
+        detector.load()
+
+
+def test_posture_checkpoint_rejects_class_order_mismatch(
+    development_config, tmp_path, monkeypatch
+) -> None:
+    checkpoint = tmp_path / "checkpoint_best_total.pth"
+    checkpoint.touch()
+    config = development_config.detector.model_copy(
+        update={
+            "mode": DetectionMode.POSTURE_MULTICLASS,
+            "weights_path": checkpoint,
+            "class_names": {0: "standing", 1: "fallen", 2: "sitting", 3: "lying"},
+        }
+    )
+    detector = RFDETRDetector(config)
+    monkeypatch.setattr(detector, "_official_factory", lambda: FakeMismatchedCheckpointFactory)
+
+    with pytest.raises(ConfigurationError, match="class_names differ"):
+        detector.load()

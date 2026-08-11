@@ -88,3 +88,20 @@ GMDCSA-24 is split only by subject: S1-S2 threshold development, S3 threshold va
 locked test. The deterministic small subset selects two Fall and two ADL videos per subject.
 Thresholds must not be selected on S3 or S4. Clip labels support clip-level event metrics but do
 not justify detection-delay claims without separate human-confirmed onset timestamps.
+
+## D-015: posture-data audit gate
+
+Fallen Person is accepted only through a local COCO audit that verifies all image/annotation
+hashes, dimensions, boxes, the exact four-class schema, and cross-split duplicates. RF-DETR class
+indices are derived by sorting COCO category IDs and must remain contiguous from zero. The source
+export does not contain person/video group identifiers, so its original validation split cannot
+substitute for the subject-isolated GMDCSA-24 cascade protocol.
+
+## D-016: fine-tuned checkpoint loading and smoke boundary
+
+Locally trained RF-DETR checkpoints are loaded with the upstream `from_checkpoint` path, not as
+official starter weights. The adapter pins the four-class head and rejects a selected Nano/Small
+architecture mismatch. One-epoch synthetic GPU runs for both variants proved training,
+serialization, safe reload, and inference mechanics only. RF-DETR 1.9.1 omits query-layout fields
+from these best-total checkpoint args, so the generic reload warning is retained; both smoke
+checkpoints were separately verified to carry the expected default 300 x 13 query rows.

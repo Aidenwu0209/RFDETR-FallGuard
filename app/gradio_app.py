@@ -187,17 +187,25 @@ def build_app(config_path: str = "configs/profiles/development.yaml") -> Any:
                     "fall timestamps; detection delay stays unavailable until human annotation."
                 )
             with gr.Tab("Training & Thresholds"):
-                gr.JSON(
-                    value={
-                        "short_finetune": {
-                            "variants": ["nano", "small"],
-                            "batch_size": 1,
-                            "gradient_accumulation": 4,
-                            "data_required": "Fallen Person COCO export",
-                        },
-                        "formal_threshold_state": "pending grouped validation",
-                        "test_set_policy": "Subject 4 remains locked until thresholds freeze",
+                training_status = gr.JSON(
+                    value=lambda: {
+                        "fallen_person": environment_status()["datasets"]["fallen_person"],
+                        "fine_tuned_checkpoints": environment_status()["models"][
+                            "fine_tuned_checkpoints"
+                        ],
+                        "validation": environment_status()["validation"],
                     }
+                )
+                refresh_training = gr.Button("Refresh training/threshold status")
+                refresh_training.click(
+                    lambda: {
+                        "fallen_person": environment_status()["datasets"]["fallen_person"],
+                        "fine_tuned_checkpoints": environment_status()["models"][
+                            "fine_tuned_checkpoints"
+                        ],
+                        "validation": environment_status()["validation"],
+                    },
+                    outputs=training_status,
                 )
                 gr.Markdown(
                     "The UI reports training/validation readiness. Training is intentionally run "

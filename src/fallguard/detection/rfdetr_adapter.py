@@ -62,15 +62,48 @@ class RFDETRDetector:
                 "no weights_path was provided and implicit official-weight download is disabled"
             )
 
-        factory = self._model_factory or self._official_factory()
+        official_factory = self._official_factory() if self._model_factory is None else None
+        factory = self._model_factory or official_factory
+        assert factory is not None
         kwargs: dict[str, Any] = {}
-        if self.config.weights_path is not None:
-            kwargs["pretrain_weights"] = str(self.config.weights_path)
         if self.device != "auto":
             kwargs["device"] = self.device
+        if (
+            self._model_factory is None
+            and self.config.mode == DetectionMode.POSTURE_MULTICLASS
+            and self.config.weights_path is not None
+        ):
+            class_ids = sorted(self.config.class_names)
+            if class_ids != list(range(len(class_ids))):
+                raise ConfigurationError(
+                    "posture_multiclass class_names IDs must be contiguous and start at zero"
+                )
+            assert official_factory is not None
+            loaded = official_factory.from_checkpoint(
+                str(self.config.weights_path),
+                num_classes=len(class_ids),
+                **kwargs,
+            )
+            if not isinstance(loaded, official_factory):
+                raise ConfigurationError(
+                    "checkpoint architecture does not match selected "
+                    f"{self.config.model_variant} variant"
+                )
+            checkpoint_names = getattr(loaded, "class_names", None)
+            expected_names = [self.config.class_names[index] for index in class_ids]
+            if checkpoint_names is not None and list(checkpoint_names) != expected_names:
+                raise ConfigurationError(
+                    f"checkpoint class_names differ from config: {checkpoint_names} != "
+                    f"{expected_names}"
+                )
+            self._model = loaded
+            return
+
+        if self.config.weights_path is not None:
+            kwargs["pretrain_weights"] = str(self.config.weights_path)
         self._model = factory(**kwargs)
 
-    def _official_factory(self) -> Callable[..., Any]:
+    def _official_factory(self) -> type[Any]:
         try:
             installed = version("rfdetr")
         except PackageNotFoundError as exc:
@@ -85,7 +118,7 @@ class RFDETRDetector:
             from rfdetr import RFDETRNano, RFDETRSmall
         except ImportError as exc:
             raise DependencyUnavailableError(f"failed to import rfdetr: {exc}") from exc
-        factories: dict[str, Callable[..., Any]] = {
+        factories: dict[str, type[Any]] = {
             "nano": RFDETRNano,
             "small": RFDETRSmall,
         }

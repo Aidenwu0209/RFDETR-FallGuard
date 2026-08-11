@@ -4,9 +4,9 @@ An auditable fall-monitoring cascade built around official RF-DETR, class-agnost
 tracking, temporal event confirmation, provider-agnostic semantic review, and application-owned
 alerts.
 
-> Current scope: real official Nano/Small person-detection smoke validation plus grouped
-> GMDCSA-24 preparation. No trained posture checkpoint, final threshold, or scientific accuracy
-> claim is bundled.
+> Current scope: real official Nano/Small person-detection smoke validation, audited posture-data
+> and short-training entry points, plus grouped GMDCSA-24 preparation. No real-data posture
+> checkpoint, final threshold, or scientific accuracy claim is bundled.
 
 ## Quick start
 
@@ -91,18 +91,41 @@ python scripts/validate_official_model.py data/smoke/bus.jpg \
 
 ## Training and evaluation entry points
 
-Detector training prints its resolved official parameter names by default. It performs training
-only with `--execute`:
+First audit an extracted Roboflow COCO export. The audit verifies images, annotations, class IDs,
+hashes, bounding boxes, and cross-split exact/near duplicates, then emits the only class-order
+profile accepted by the training gate:
+
+```bash
+python scripts/prepare_fallen_person.py \
+  --dataset-dir data/raw/fallen-person \
+  --output-dir data/processed/fallen-person-audit
+```
+
+Detector training prints its resolved official parameter names by default and performs training
+only with `--execute`. Nano and Small use the same audited class mapping and data:
 
 ```bash
 python scripts/train_detector.py \
-  --dataset-dir datasets/processed/fall-coco \
-  --config configs/profiles/experiment.yaml \
-  --model-variant nano
+  --dataset-dir data/raw/fallen-person \
+  --dataset-audit data/processed/fallen-person-audit/audit.json \
+  --config data/processed/fallen-person-audit/posture_profile.yaml \
+  --weights weights/official/rf-detr-nano.pth \
+  --model-variant nano \
+  --output-dir checkpoints/nano \
+  --epochs 2 --batch-size 1 --grad-accum-steps 4 --execute
+
+python scripts/train_detector.py \
+  --dataset-dir data/raw/fallen-person \
+  --dataset-audit data/processed/fallen-person-audit/audit.json \
+  --config data/processed/fallen-person-audit/posture_profile.yaml \
+  --weights weights/official/rf-detr-small.pth \
+  --model-variant small \
+  --output-dir checkpoints/small \
+  --epochs 2 --batch-size 1 --grad-accum-steps 4 --execute
 
 python scripts/evaluate_detector.py \
-  --dataset-dir datasets/processed/fall-coco \
-  --weights weights/fallguard-small.pth \
+  --dataset-dir data/raw/fallen-person \
+  --weights checkpoints/small/checkpoint_best_total.pth \
   --split test
 
 python scripts/train_semantic_adapter.py \
@@ -120,7 +143,8 @@ python scripts/prepare_gmdcsa24.py \
 ```
 
 The resulting grouped runner requires an actual posture checkpoint and a config whose class order
-matches checkpoint metadata. It reports clip-level metrics only:
+matches checkpoint metadata. Use S1-S2 only for candidate threshold selection, use S3 once for
+confirmation, and keep S4 locked until the final comparison. It reports clip-level metrics only:
 
 ```bash
 python scripts/validate_grouped_pipeline.py \
@@ -185,6 +209,7 @@ python scripts/infer_video.py --help
 python scripts/track_video.py --help
 python scripts/run_pipeline.py --help
 python scripts/train_detector.py --help
+python scripts/prepare_fallen_person.py --help
 python scripts/evaluate_detector.py --help
 python scripts/benchmark.py --help
 python scripts/train_semantic_adapter.py --help

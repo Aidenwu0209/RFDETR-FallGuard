@@ -10,9 +10,9 @@ Evidence date: 2026-08-11. Runtime evidence was collected on
 | M0 repository audit and baseline | VERIFIED_INTEGRATION | Public origin and both clones were empty; initial `pytest` failed because no project/environment existed; Python 3.12.3 and RTX 4060 driver visibility recorded |
 | M1 Config, Schema, exceptions, logging, device, video, timing | VERIFIED_INTEGRATION | Strict-config/schema, secret redaction, video read/seek, session isolation, environment CLI, and deterministic vertical slice tests pass |
 | M1 Mock vertical slice | VERIFIED_INTEGRATION | Exit 0; explicitly `MOCK`, 1 event, 1 alert, 3 transitions, before/during/after person crops; formal eligibility false |
-| M2 RF-DETR adapter, conversion, image/frame/batch, training/evaluation mapping, CLIs | VERIFIED_UNIT | Fake official-output contract tests pass; Nano/Small and `rfdetr==1.9.1` signatures/source inspected; unsupported `gradient_checkpointing` is rejected |
+| M2 RF-DETR adapter, conversion, image/frame/batch, training/evaluation mapping, CLIs | VERIFIED_UNIT | Fake official-output contract tests pass; real fine-tuned checkpoints use official `from_checkpoint`, enforce contiguous class IDs, and reject a Nano/Small architecture mismatch; unsupported `gradient_checkpointing` is rejected |
 | M2 real RF-DETR inference | VERIFIED_INTEGRATION | Official Nano/Small weights passed official MD5 checks and separate RTX 4060 CUDA inference on the same public image; each returned four `person` detections at 0.5; reports explicitly remain single-image smoke evidence |
-| M2 posture-multiclass training/evaluation | BLOCKED_EXTERNAL | Training stack is installed and the short-run CLI is ready; Roboflow login/key is still required to export the authorized Fallen Person COCO dataset |
+| M2 posture-multiclass training/evaluation | BLOCKED_EXTERNAL | Data audit/hash gate and short-run CLI are ready. One-epoch synthetic Nano and Small GPU runs produced reloadable four-class checkpoints, proving mechanics only; Roboflow login/key is still required for real-data training |
 | M3 pinned ByteTrack adapter and TrackManager | VERIFIED_INTEGRATION | Real `supervision==0.30.0` tests pass for posture-class changes and one-frame disappearance/reappearance with stable ID; scope, history, expiry, and empty-frame advancement tested |
 | M4 temporal state machine, events, keyframes | VERIFIED_INTEGRATION | Seconds/coordinates/smoothing, auditable transitions, timeout, atomic event close/reopen, bounded buffer, random-access video reread, and before/during/after persistence tested |
 | M5 Router, Mock Provider, privacy, AlertManager | VERIFIED_INTEGRATION | Mock end-to-end route passes; cloud image double-consent, fallback reason, unexpected-error propagation, structured schema, redaction, and application-owned alert tested |
@@ -24,26 +24,26 @@ Evidence date: 2026-08-11. Runtime evidence was collected on
 | M6 formal real-data threshold result | BLOCKED_EXTERNAL | Grouped full-cascade runner is implemented, but a posture checkpoint is still required; clip labels cannot support detection-delay claims without human onset timestamps |
 | M7 Gradio, docs, CLI and full QA | VERIFIED_INTEGRATION | Five-tab UI rendered in a real browser with model/GPU reports, dataset protocol, training state, and local-only key status; non-blocking HTTP 200 probe passes |
 | Continuous live camera streaming | NOT_IMPLEMENTED | UI intentionally supports uploaded/webcam-recorded finite clips and does not claim continuous real-time monitoring |
-| GitHub publication | VERIFIED_INTEGRATION | Initial commit `63f999e3ccd612c4a48e46ca729f4821e873516b` pushed to `main`; data, weights, artifacts, and secrets remain ignored |
+| GitHub publication | VERIFIED_INTEGRATION | Commits `63f999e` and `5055b93` are on `main`; data, weights, artifacts, and secrets remain ignored |
 
 ## Baseline QA evidence
 
 ```text
 .venv/bin/ruff format .
-  exit 0; 3 files formatted, 86 unchanged on the latest implementation run
+  exit 0; 93 files unchanged on the latest implementation run
 .venv/bin/ruff check .
   exit 0; all checks passed
 .venv/bin/mypy src app scripts
-  exit 0; success, 59 source files after training extras were installed
+  exit 0; success, 61 source files after training extras were installed
 .venv/bin/pytest -q
-  exit 0; 51 passed, 2 deselected, 0 failed, 0 skipped, 1 warning
+  exit 0; 59 passed, 2 deselected, 0 failed, 0 skipped, 1 warning
 .venv/bin/python -m compileall -q src app scripts tests datasets
   exit 0
 .venv/bin/python scripts/check_environment.py
   exit 0; local-only audit, network_or_paid_call_performed=false
 .venv/bin/python scripts/smoke_gradio.py
   exit 0; HTTP 200 and server closed
-13 required scripts with --help
+15 required scripts with --help
   exit 0
 ```
 
@@ -60,6 +60,7 @@ therefore reproducible today but requires a deliberate future migration.
   explicitly authorized official model and dataset downloads plus short detector fine-tuning.
 - Official weights, dataset archives, manifests, reports, and future checkpoints remain outside Git.
 - No AP, event metric, FPS, model quality, or VRAM result from synthetic/mock work is presented as
-  scientific or deployment evidence.
+  scientific or deployment evidence. The synthetic Nano/Small run proves only that training,
+  checkpoint serialization, official reload, and GPU inference execute.
 - The generated validation artifacts live only under `/tmp`; an accidentally generated root-level
   mock artifact set was identified and removed before final QA.
