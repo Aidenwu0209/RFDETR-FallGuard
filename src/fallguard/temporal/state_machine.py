@@ -68,6 +68,7 @@ class TemporalStateMachine:
         ratio_signal = features.aspect_ratio_width_over_height >= self.aspect_ratio_fall_min
         speed_signal = features.vertical_speed_frame_height_per_second >= self.vertical_speed_min
         fall_signal = ratio_signal or speed_signal or falling_posture or lying_posture
+        candidate_trigger = speed_signal or falling_posture
         upright_signal = (
             upright_posture
             and features.aspect_ratio_width_over_height <= self.upright_aspect_ratio_max
@@ -75,9 +76,9 @@ class TemporalStateMachine:
 
         next_state = current.state
         reason = ""
-        if current.state == MotionState.UPRIGHT and fall_signal:
+        if current.state == MotionState.UPRIGHT and candidate_trigger:
             next_state = MotionState.SUSPECTED
-            reason = self._signal_reason(ratio_signal, speed_signal, falling_posture, lying_posture)
+            reason = self._signal_reason(False, speed_signal, falling_posture, False)
         elif current.state == MotionState.SUSPECTED:
             if upright_signal and not fall_signal:
                 next_state = MotionState.UPRIGHT

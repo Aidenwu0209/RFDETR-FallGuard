@@ -37,7 +37,8 @@ the observed timeout. A new source/session must reset ByteTrack.
 
 ```text
 UPRIGHT -> SUSPECTED
-  ratio, downward-speed, configured falling class, or configured lying class
+  downward-speed or configured falling class
+  (ratio and configured lying class are support evidence, not event initiators)
 
 SUSPECTED -> FALLING
   evidence persists for suspect_duration_seconds
@@ -60,6 +61,9 @@ RECOVERING -> FALLING
 
 Every actual change produces `TransitionRecord.reason`. Floating-duration comparisons use a
 `1e-9` numerical tolerance so an exact configured boundary is not delayed by binary rounding.
+`SUSPECTED` is an internal candidate and does not create a `FallEvent`; the event is promoted
+only when persistent evidence reaches `FALLING` (or a direct `LYING` confirmation). This keeps
+ordinary static lying and a single wide bounding box from becoming completed fall events.
 
 ## Profiles
 

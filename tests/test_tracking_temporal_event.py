@@ -225,6 +225,32 @@ def test_state_machine_and_event_manager_do_not_duplicate_continuous_event(
     assert "lying_started_at_seconds" in events.all_events()[0].metadata
 
 
+def test_static_lying_or_wide_box_cannot_start_fall_candidate(development_config) -> None:
+    machine = TemporalStateMachine(
+        development_config.temporal,
+        development_config.detector.posture_groups,
+    )
+    lying = tracked(0, 0.0, (10, 60, 95, 90), "lying")
+    assert machine.update(lying, feature(0, 0.0, 2.8, 0.0, "lying")) is None
+    assert machine.state_for(lying) == MotionState.UPRIGHT
+
+    wide_upright = tracked(1, 0.2, (10, 60, 95, 90), "standing")
+    assert machine.update(wide_upright, feature(1, 0.2, 2.8, 0.0, "standing")) is None
+    assert machine.state_for(wide_upright) == MotionState.UPRIGHT
+
+
+def test_downward_speed_can_start_candidate_without_falling_class(development_config) -> None:
+    machine = TemporalStateMachine(
+        development_config.temporal,
+        development_config.detector.posture_groups,
+    )
+    observation = tracked(0, 0.0, (40, 10, 60, 90), "standing")
+    transition = machine.update(observation, feature(0, 0.0, 0.25, 0.4, "standing"))
+    assert transition is not None
+    assert transition.next_state == MotionState.SUSPECTED
+    assert "downward speed" in transition.reason
+
+
 def test_event_manager_merges_nearby_episode_and_suppresses_cooldown(
     development_config,
 ) -> None:

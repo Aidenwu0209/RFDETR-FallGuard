@@ -64,6 +64,9 @@ rejects non-increasing timestamps. Every state transition records a reason.
 One continuing fall produces one event. Merge gap, cooldown, timeout, and frame-ring capacity
 are configured. Keyframe metadata records whether a frame is before, during, or after, its
 selection reason, and full-frame/person-crop references according to privacy policy.
+Static `lying` or a wide box may support an already-started temporal candidate but cannot start
+one by itself. A `SUSPECTED` candidate is promoted to an event only after persistent evidence
+reaches `FALLING` or `LYING`.
 
 ## 7. Evaluation boundary
 
