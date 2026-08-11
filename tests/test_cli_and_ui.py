@@ -21,6 +21,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
         "evaluate_detector.py",
         "benchmark.py",
         "train_semantic_adapter.py",
+        "validate_official_model.py",
+        "prepare_gmdcsa24.py",
+        "validate_grouped_pipeline.py",
+        "check_api_configuration.py",
     ],
 )
 def test_required_cli_help_is_runnable(script: str) -> None:

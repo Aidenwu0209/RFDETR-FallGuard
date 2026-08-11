@@ -4,8 +4,9 @@ An auditable fall-monitoring cascade built around official RF-DETR, class-agnost
 tracking, temporal event confirmation, provider-agnostic semantic review, and application-owned
 alerts.
 
-> Current scope: engineering infrastructure and deterministic mock validation. No trained
-> posture checkpoint, dataset, final threshold, or scientific metric is bundled.
+> Current scope: real official Nano/Small person-detection smoke validation plus grouped
+> GMDCSA-24 preparation. No trained posture checkpoint, final threshold, or scientific accuracy
+> claim is bundled.
 
 ## Quick start
 
@@ -20,6 +21,12 @@ python scripts/run_pipeline.py \
   --mode mock \
   --config configs/profiles/development.yaml \
   --output-dir artifacts/mock-run
+```
+
+On the validated Legion runtime, install detector training support with:
+
+```bash
+python -m pip install 'rfdetr[train]==1.9.1'
 ```
 
 Optional integrations are installed explicitly:
@@ -47,7 +54,8 @@ Real commands never download weights implicitly. Supply an existing approved che
 
 ```bash
 python scripts/infer_image.py input.jpg \
-  --weights weights/rf-detr-small.pth \
+  --model-variant small \
+  --weights weights/official/rf-detr-small.pth \
   --output-json artifacts/image-detections.json \
   --output-image artifacts/image-annotated.jpg
 
@@ -72,6 +80,15 @@ python scripts/run_pipeline.py \
 Official COCO-pretrained weights belong in `person_only` mode and only prove person detection.
 `posture_multiclass` requires a fine-tuned checkpoint plus class metadata.
 
+Repeat the hash-gated real GPU smoke check for each official model:
+
+```bash
+python scripts/validate_official_model.py data/smoke/bus.jpg \
+  --variant nano --weights weights/official/rf-detr-nano.pth
+python scripts/validate_official_model.py data/smoke/bus.jpg \
+  --variant small --weights weights/official/rf-detr-small.pth
+```
+
 ## Training and evaluation entry points
 
 Detector training prints its resolved official parameter names by default. It performs training
@@ -80,7 +97,8 @@ only with `--execute`:
 ```bash
 python scripts/train_detector.py \
   --dataset-dir datasets/processed/fall-coco \
-  --config configs/profiles/experiment.yaml
+  --config configs/profiles/experiment.yaml \
+  --model-variant nano
 
 python scripts/evaluate_detector.py \
   --dataset-dir datasets/processed/fall-coco \
@@ -90,6 +108,29 @@ python scripts/evaluate_detector.py \
 python scripts/train_semantic_adapter.py \
   --config configs/qlora.yaml \
   --allow-external-blockers
+```
+
+Prepare the subject-isolated GMDCSA-24 manifests after its official archive is downloaded:
+
+```bash
+python scripts/prepare_gmdcsa24.py \
+  --archive data/raw/gmdcsa24/GMDCSA24-v2.0.zip \
+  --extract-dir data/raw/gmdcsa24/extracted \
+  --output-dir data/processed/gmdcsa24
+```
+
+The resulting grouped runner requires an actual posture checkpoint and a config whose class order
+matches checkpoint metadata. It reports clip-level metrics only:
+
+```bash
+python scripts/validate_grouped_pipeline.py \
+  --config configs/profiles/posture-validated.yaml \
+  --manifest data/processed/gmdcsa24/manifest.json \
+  --dataset-root data/raw/gmdcsa24/extracted/REPOSITORY_ROOT \
+  --weights checkpoints/nano/checkpoint_best_total.pth \
+  --model-variant nano \
+  --partition threshold_validation \
+  --output-json artifacts/validation/nano-s3.json
 ```
 
 Detection AP is delegated to official RF-DETR evaluation. Event matching is available through
@@ -126,6 +167,9 @@ python scripts/smoke_gradio.py
 Upload and webcam inputs are processed as finite clips. This repository does not call that
 continuous real-time monitoring. Real mode returns a friendly configuration error when no
 checkpoint is present. Cloud images require both configuration and a per-session consent box.
+The UI also exposes read-only model/GPU smoke reports, grouped dataset status, training/threshold
+readiness, and API-key presence. API values are never rendered and refresh performs no network or
+paid call.
 
 ## Quality commands
 

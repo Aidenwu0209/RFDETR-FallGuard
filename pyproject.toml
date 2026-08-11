@@ -29,6 +29,7 @@ dev = [
   "types-PyYAML>=6,<7",
 ]
 rfdetr = ["rfdetr==1.9.1"]
+rfdetr-train = ["rfdetr[train]==1.9.1"]
 tracking = ["supervision==0.30.0"]
 ui = ["gradio==6.22.0"]
 cloud = ["openai==2.53.0"]

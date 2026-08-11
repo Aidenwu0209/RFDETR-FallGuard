@@ -21,6 +21,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("image", type=Path)
     parser.add_argument("--config", default="configs/profiles/development.yaml")
+    parser.add_argument("--model-variant", choices=("nano", "small"))
     parser.add_argument("--weights", type=Path)
     parser.add_argument("--allow-weight-download", action="store_true")
     parser.add_argument("--output-json", type=Path)
@@ -29,6 +30,7 @@ def main() -> None:
     config = load_config(args.config)
     detector_config = config.detector.model_copy(
         update={
+            "model_variant": args.model_variant or config.detector.model_variant,
             "weights_path": args.weights or config.detector.weights_path,
             "allow_weight_download": args.allow_weight_download,
         }

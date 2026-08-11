@@ -17,6 +17,7 @@ def main() -> None:
     parser.add_argument("--dataset-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/rfdetr-training"))
     parser.add_argument("--weights", type=Path)
+    parser.add_argument("--model-variant", choices=("nano", "small"))
     parser.add_argument("--allow-weight-download", action="store_true")
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--lr", type=float, default=0.0001)
@@ -30,6 +31,7 @@ def main() -> None:
     config = load_config(args.config)
     detector_config = config.detector.model_copy(
         update={
+            "model_variant": args.model_variant or config.detector.model_variant,
             "weights_path": args.weights or config.detector.weights_path,
             "allow_weight_download": args.allow_weight_download,
         }

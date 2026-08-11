@@ -71,6 +71,20 @@ the observed runtime and do not treat driver visibility as CUDA execution proof.
 
 ## D-012: Git publication
 
-The origin is empty and all project files are currently untracked. No local commit or remote push
-is made because the controlling execution instruction requires explicit user confirmation before
-push.
+The user explicitly authorized publication to `main`. Initial commit
+`63f999e3ccd612c4a48e46ca729f4821e873516b` was pushed after secret/large-file scope checks.
+Weights, datasets, artifacts, checkpoints, uploads, videos, and environment files remain ignored.
+
+## D-013: official-model evidence boundary
+
+Nano and Small use separately MD5-validated official COCO weights. The same public image is used
+for real RTX 4060 smoke inference. Latency, memory, and detections are labeled single-image smoke
+evidence, not AP, fall accuracy, sustained video FPS, or deployment performance. The upstream
+`_kp_active_mask` partial-load warning is retained in logs.
+
+## D-014: grouped fall validation
+
+GMDCSA-24 is split only by subject: S1-S2 threshold development, S3 threshold validation, and S4
+locked test. The deterministic small subset selects two Fall and two ADL videos per subject.
+Thresholds must not be selected on S3 or S4. Clip labels support clip-level event metrics but do
+not justify detection-delay claims without separate human-confirmed onset timestamps.

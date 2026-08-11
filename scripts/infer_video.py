@@ -50,7 +50,7 @@ def main() -> None:
                         args.output_video.parent.mkdir(parents=True, exist_ok=True)
                         writer = cv2.VideoWriter(
                             str(args.output_video),
-                            cv2.VideoWriter_fourcc(*"mp4v"),
+                            cv2.VideoWriter_fourcc(*"mp4v"),  # type: ignore[attr-defined]
                             reader.fps or 30.0,
                             (packet.metadata.frame_width, packet.metadata.frame_height),
                         )

@@ -55,7 +55,7 @@ class LocalQwenProvider(SemanticProvider):
         except ImportError as exc:
             raise DependencyUnavailableError("install .[local-vlm] for Local Qwen") from exc
         try:
-            self._processor = AutoProcessor.from_pretrained(
+            self._processor = AutoProcessor.from_pretrained(  # type: ignore[no-untyped-call]
                 self.model_path,
                 local_files_only=True,
                 trust_remote_code=False,

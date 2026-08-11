@@ -167,9 +167,11 @@ def execute_qlora(config: QLoRAConfig) -> None:
     except ImportError as exc:
         raise DependencyUnavailableError("install .[local-vlm] before QLoRA execution") from exc
 
-    processor = AutoProcessor.from_pretrained(config.model_name_or_path, local_files_only=True)
+    processor = AutoProcessor.from_pretrained(  # type: ignore[no-untyped-call]
+        config.model_name_or_path, local_files_only=True
+    )
     compute_dtype = getattr(torch, config.bnb_4bit_compute_dtype)
-    quantization = BitsAndBytesConfig(
+    quantization = BitsAndBytesConfig(  # type: ignore[no-untyped-call]
         load_in_4bit=config.load_in_4bit,
         bnb_4bit_quant_type=config.bnb_4bit_quant_type,
         bnb_4bit_compute_dtype=compute_dtype,
@@ -213,8 +215,8 @@ def execute_qlora(config: QLoRAConfig) -> None:
         data_collator=collator,
     )
     trainer.train()
-    model.save_pretrained(config.output_dir)
-    processor.save_pretrained(config.output_dir)
+    model.save_pretrained(str(config.output_dir))
+    processor.save_pretrained(str(config.output_dir))
 
 
 class _SemanticDataset:
