@@ -38,6 +38,20 @@ def digest(path: Path, algorithm: str = "md5") -> str:
     return value.hexdigest()
 
 
+def portable_path(path: Path) -> str:
+    """Serialize a path with stable separators on every supported platform."""
+    return path.as_posix()
+
+
+def write_json(path: Path, payload: object) -> None:
+    """Write deterministic JSON bytes with an LF terminator on every platform."""
+    path.write_text(
+        json.dumps(payload, indent=2) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+
+
 def safe_extract(archive: Path, target: Path) -> None:
     target_resolved = target.resolve()
     with zipfile.ZipFile(archive) as bundle:
@@ -291,18 +305,18 @@ def main() -> None:
     except ValueError as exc:
         parser.error(str(exc))
     manifest["archive"] = {
-        "path": str(args.archive),
+        "path": portable_path(args.archive),
         "bytes": args.archive.stat().st_size,
         "md5": actual_md5,
     }
     manifest["protocol_declaration"] = {
-        "path": str(args.protocol_declaration),
+        "path": portable_path(args.protocol_declaration),
         "sha256": digest(args.protocol_declaration, "sha256"),
         "protocol_id": declaration["protocol_id"],
     }
     args.output_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = args.output_dir / "manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    write_json(manifest_path, manifest)
     write_csv(args.output_dir / "manifest.csv", manifest["records"])
     write_csv(
         args.output_dir / "small_validation.csv",

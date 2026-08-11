@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import pytest
 
@@ -14,6 +14,39 @@ SPEC = importlib.util.spec_from_file_location(
 assert SPEC is not None and SPEC.loader is not None
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
+
+
+def test_manifest_serialization_is_byte_stable_across_platforms(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output = tmp_path / "manifest.json"
+    observed: dict[str, str | None] = {}
+    original_write_text = Path.write_text
+
+    def record_write_text(
+        path: Path,
+        data: str,
+        encoding: str | None = None,
+        errors: str | None = None,
+        newline: str | None = None,
+    ) -> int:
+        observed["newline"] = newline
+        return original_write_text(
+            path,
+            data,
+            encoding=encoding,
+            errors=errors,
+            newline=newline,
+        )
+
+    monkeypatch.setattr(Path, "write_text", record_write_text)
+    MODULE.write_json(output, {"path": "data/example"})
+
+    assert observed["newline"] == "\n"
+    assert output.read_bytes() == b'{\n  "path": "data/example"\n}\n'
+    assert MODULE.portable_path(PureWindowsPath("data\\raw\\archive.zip")) == (
+        "data/raw/archive.zip"
+    )
 
 
 def test_manifest_preserves_subject_groups_and_excludes_auxiliary_videos(
