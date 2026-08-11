@@ -21,8 +21,10 @@ Evidence date: 2026-08-11. Runtime evidence was collected on
 | M6 detection/event/deployment evaluation and experiment recorder | VERIFIED_INTEGRATION | Official detection delegation, one-to-one event metrics, unavailable-metric reasons, mock formal rejection, warm-up reset, resource timing, and reproducibility snapshot tested |
 | M6 GMDCSA-24 grouped validation preparation | VERIFIED_INTEGRATION | Zenodo v2.0 archive MD5 verified; 160 readable videos, 4 subjects, 79 ADL/81 Fall, no duplicate hashes or subject leakage; S1-S2 development, S3 validation, S4 locked test; 16-video subset generated |
 | M6 real cascade engineering smoke | VERIFIED_INTEGRATION | Official Small `person_only` completed RF-DETR -> ByteTrack -> Temporal -> Event on one Fall and one ADL clip; both produced one unique candidate, demonstrating execution and also why person-only output is invalid for final thresholds |
-| M6 threshold candidate/freeze protocol | VERIFIED_INTEGRATION | Eight bounded S1-S2 candidates were evaluated with matching model, checkpoint, manifest, video IDs, parameters, Git commit, and pipeline fingerprint. Nano confidence/tracker activation 0.75 was frozen after 4 TP, 0 FP, 0 FN, 4 TN; S4 requires a matching S3 confirmation, explicit unlock, and all videos |
-| M6 formal real-data threshold result | BLOCKED_EXTERNAL | The one-time frozen S3 run produced 1 TP, 0 FP, 1 FN, 2 TN (recall 0.5, F1 0.6667). The strict confirmation gate correctly rejected it, so no formal threshold is confirmed and S4 remains locked. A revised checkpoint/new development cycle needs a fresh untouched validation group; S3 must not be tuned on or reused as if unseen |
+| M6 historical GMDCSA threshold cycle | VERIFIED_INTEGRATION | Eight bounded S1-S2 candidates were evaluated with matching evidence. Nano confidence/tracker activation 0.75 passed development but failed the one-time S3 gate at recall 0.5. No GMDCSA threshold was confirmed; S4 remains unused and this negative result is immutable historical evidence |
+| M6 fresh Figshare-Fall29 protocol | VERIFIED_INTEGRATION | Official CC BY 4.0 archive bytes/MD5 and extraction were verified. Two auxiliary timelapses and one exact duplicate were excluded only from the derived manifest, leaving 2,013 unique subject videos. Development, validation, and locked-test groups contain disjoint subjects; the declaration predates model results |
+| M6 Fall29 threshold freeze and validation | VERIFIED_INTEGRATION | Twelve Nano/Small candidates used the same 48 development clips. Small confidence/tracker activation 0.40 achieved 24 TP, 0 FP, 0 FN, 24 TN and was frozen. Its one-time 20-clip validation achieved 9 TP, 0 FP, 1 FN, 10 TN (recall 0.90, F1 0.9474), exactly passing the predeclared gate without retuning |
+| M6 full locked cascade test | VERIFIED_INTEGRATION | The confirmed Small profile evaluated all 374 locked clips from subjects 13/14/20/22/29: 139 TP, 19 FP, 64 FN, 152 TN; precision 0.8797, recall 0.6847, specificity 0.8889, F1 0.7701. Independent recomputation matched; IDs, checkpoint, parameters, manifest, commit, and implementation fingerprint were bound. This confirms an internal threshold, not external generalization |
 | M7 Gradio, docs, CLI and full QA | VERIFIED_INTEGRATION | Five-tab UI rendered in a real browser with model/GPU reports, dataset protocol, training state, and local-only key status; non-blocking HTTP 200 probe passes |
 | Continuous live camera streaming | NOT_IMPLEMENTED | UI intentionally supports uploaded/webcam-recorded finite clips and does not claim continuous real-time monitoring |
 | GitHub publication | VERIFIED_INTEGRATION | The implementation and evidence-bound protocol are published on `main`; data, weights, artifacts, videos, environment files, and secrets remain ignored |
@@ -31,20 +33,20 @@ Evidence date: 2026-08-11. Runtime evidence was collected on
 
 ```text
 .venv/bin/ruff format .
-  exit 0; 100 files unchanged on the latest implementation run
+  exit 0; 104 files unchanged on the latest implementation run
 .venv/bin/ruff check .
   exit 0; all checks passed
 .venv/bin/mypy src app scripts
-  exit 0; success, 67 source files
+  exit 0; success, 70 source files
 .venv/bin/pytest -q
-  exit 0; 79 passed, 2 deselected, 0 failed, 0 skipped, 1 warning
+  exit 0; 85 passed, 2 deselected, 0 failed, 0 skipped, 1 warning
 .venv/bin/python -m compileall -q src app scripts tests datasets
   exit 0
 .venv/bin/python scripts/check_environment.py
   exit 0; local-only audit, network_or_paid_call_performed=false
 .venv/bin/python scripts/smoke_gradio.py
   exit 0; HTTP 200 and server closed
-19 required scripts with --help
+21 required scripts with --help
   exit 0
 ```
 
@@ -63,7 +65,13 @@ therefore reproducible today but requires a deliberate future migration.
 - Fallen Person detector metrics are engineering-only because the export has 21,575 cross-split
   dHash near-duplicate pairs and no person/video group identifiers. They are not presented as
   scientific generalization evidence.
-- The S3 grouped event result is a valid negative validation result: it prevents confirmation of a
-  formal threshold. It must not be repaired by retuning on S3 or by inspecting locked S4 results.
+- The historical GMDCSA S3 result remains a valid negative result and was not reused for tuning.
+- Fall29 confirms Small confidence/tracker activation 0.40 within its predeclared internal
+  subject-isolated protocol. Locked-test recall fell to 0.6847, so the result does not establish
+  real-world or elderly-population generalization and no detection-delay metric is reported.
+- The ignored locked-test report SHA-256 is
+  `e2cd46d08c9b7feecba72c5b42e3209bc9de0a4b53311d8bbb1f9354e2e94c04`; it binds manifest
+  `29cfa569468a27e7dafc6b4d2c4a0175bf776c10a8d097ff4c474aa8affa5a42` and Small checkpoint
+  `7c843e2570a077317c95e3458d50a402f36f6ac8ebcd8bffe7fa8da28f898e71`.
 - The 1.9 GiB synthetic dataset and checkpoints were removed from their exact `/tmp` path after
   recording an ignored mechanics-only evidence report; no synthetic asset entered Git.

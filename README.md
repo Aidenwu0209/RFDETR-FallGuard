@@ -172,6 +172,39 @@ python scripts/generate_threshold_candidates.py \
   --precision-grid-only
 ```
 
+This cycle evaluated all 12 Nano/Small candidates on the same 48 development clips. Small at
+detector confidence and ByteTrack activation 0.40 was selected with 24 TP, 0 FP, 0 FN, and 24 TN.
+The frozen one-time 20-clip validation produced 9 TP, 0 FP, 1 FN, and 10 TN (recall 0.90,
+specificity 1.00) and passed the predeclared gate without retuning. The confirmed profile is
+`artifacts/validation/figshare-fall29-v1/frozen-profile.yaml`.
+
+The locked group requires the matching confirmation and the complete partition:
+
+```bash
+python scripts/validate_grouped_pipeline.py \
+  --config artifacts/validation/figshare-fall29-v1/frozen-profile.yaml \
+  --manifest data/processed/figshare-fall29/manifest.json \
+  --dataset-root data/raw/figshare-fall29/extracted/VideoDataset \
+  --partition locked_test --all-videos --unlock-locked-test \
+  --threshold-confirmation \
+    artifacts/validation/figshare-fall29-v1/threshold-confirmation-migrated.json \
+  --output-json artifacts/validation/figshare-fall29-v1/locked-test.json
+```
+
+The one-time full locked test evaluated all 374 clips from subjects 13, 14, 20, 22, and 29. It
+produced 139 TP, 19 FP, 64 FN, and 152 TN: precision 0.8797, recall 0.6847, specificity 0.8889,
+and F1 0.7701. The selected IDs exactly match the manifest partition, and the report binds the
+confirmed checkpoint, parameters, manifest hash, Git commit, and implementation fingerprint.
+These are internal subject-isolated clip metrics, not a claim of real-world generalization or
+detection delay.
+
+`migrate_threshold_confirmation.py` was used only to cross an audited JSON integer/string key
+canonicalization fix. Its migration artifact proves an unchanged runtime-core hash and unchanged
+model/threshold parameters; it neither reruns validation nor authorizes retuning.
+
+The commands below retain the earlier GMDCSA-24 S1-S4 cycle as immutable historical evidence.
+That cycle failed its S3 gate and must not be interpreted as the active confirmed profile.
+
 The grouped runner requires an actual posture checkpoint and a config whose class order matches
 checkpoint metadata. Generate the four stage-1 provisional candidates before looking at grouped
 results. If stage 1 fails its declared gate, generate the bounded stage-2 precision expansion;

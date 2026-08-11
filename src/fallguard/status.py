@@ -36,6 +36,14 @@ def _read_json(path: Path) -> dict[str, Any] | None:
     return value if isinstance(value, dict) else None
 
 
+def _first_json(paths: tuple[Path, ...]) -> tuple[dict[str, Any] | None, Path | None]:
+    for path in paths:
+        value = _read_json(path)
+        if value is not None:
+            return value, path
+    return None, None
+
+
 def _manifest_summary(path: Path) -> dict[str, Any] | None:
     manifest = _read_json(path)
     if manifest is None:
@@ -123,12 +131,31 @@ def environment_status(root: str | Path = ".") -> dict[str, Any]:
     validation_dir = project_root / "artifacts/validation"
     validation_reports = [
         str(path)
-        for path in sorted(validation_dir.glob("*.json"))
+        for path in sorted(validation_dir.rglob("*.json"))
         if (_read_json(path) or {}).get("validation_kind")
         == "GROUPED_CLIP_LEVEL_INTERNAL_VALIDATION"
     ]
-    threshold_lock = _read_json(validation_dir / "threshold-lock.json")
-    threshold_confirmation = _read_json(validation_dir / "threshold-confirmation.json")
+    fall29_cycle = validation_dir / "figshare-fall29-v1"
+    threshold_lock, threshold_lock_path = _first_json(
+        (
+            fall29_cycle / "threshold-lock.json",
+            validation_dir / "threshold-lock.json",
+        )
+    )
+    threshold_confirmation, threshold_confirmation_path = _first_json(
+        (
+            fall29_cycle / "threshold-confirmation-migrated.json",
+            fall29_cycle / "threshold-confirmation.json",
+            validation_dir / "threshold-confirmation.json",
+        )
+    )
+    active_cycle = (
+        "figshare-fall29-v1"
+        if threshold_lock_path is not None and threshold_lock_path.parent == fall29_cycle
+        else "gmdcsa24-v2"
+        if threshold_lock_path is not None
+        else None
+    )
     return {
         "packages": {
             name: _package_version(name)
@@ -160,9 +187,14 @@ def environment_status(root: str | Path = ".") -> dict[str, Any]:
             "network_or_paid_call_performed": False,
         },
         "validation": {
+            "active_cycle": active_cycle,
             "grouped_reports": validation_reports,
             "threshold_lock": threshold_lock,
+            "threshold_lock_path": str(threshold_lock_path) if threshold_lock_path else None,
             "threshold_confirmation": threshold_confirmation,
+            "threshold_confirmation_path": (
+                str(threshold_confirmation_path) if threshold_confirmation_path else None
+            ),
             "thresholds_frozen": is_pending_threshold_lock(threshold_lock),
             "thresholds_confirmed_on_group": is_threshold_confirmation(threshold_confirmation),
             "thresholds_confirmed_on_s3": is_threshold_confirmation(threshold_confirmation),

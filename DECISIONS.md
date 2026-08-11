@@ -134,3 +134,34 @@ supporting evidence after initiation. A SUSPECTED transition is cached as a pend
 does not create a formal event until the track reaches FALLING or LYING. This makes the declared
 duration thresholds observable in event-presence metrics and prevents transient suspects from
 being counted as completed falls.
+
+## D-019: fresh Fall29 subject protocol
+
+The failed historical GMDCSA S3 result remains immutable and is not reused for tuning. A new
+cycle uses the public Figshare Video-Based Fall Detection Dataset with 29 subjects. The archive
+MD5 is `c784167d08f2fa94e3afd36cec758e1f`; the raw archive is preserved. Preparation excludes two
+auxiliary timelapse videos and one exact duplicate from the derived manifest, leaving 2,013
+unique subject videos. Development subjects, validation subjects, locked-test subjects, the
+six-value detector/tracker confidence grid, and pass gates are declared in
+`configs/validation/figshare_fall29_v1.yaml` before model results are inspected.
+
+The Small checkpoint at confidence/tracker activation 0.40 is selected from development only.
+Its frozen validation gate requires recall at least 0.90 and zero false-positive clips. The
+locked test is usable only after a matching confirmation and explicit `--unlock-locked-test
+--all-videos`; it cannot influence model or threshold selection.
+
+The one-time full locked test used all 374 declared clips and produced 139 TP, 19 FP, 64 FN, and
+152 TN (precision 0.8797, recall 0.6847, specificity 0.8889, F1 0.7701). The threshold remains the
+confirmed internal profile; the lower unseen-subject recall is reported as a limitation and does
+not trigger post-test retuning.
+
+## D-020: audit-only confirmation migration
+
+The first locked-test invocation stopped before processing a video because JSON reload changes
+integer class-name mapping keys to strings. The equality check now compares canonical JSON. An
+existing confirmation can cross that control-plane-only change only through an explicit migration
+artifact proving the original confirmation hash, both full implementation fingerprints, equal
+runtime-core hashes, unchanged model/threshold parameters, and no reuse of the validation
+partition. The Fall29 migration records runtime-core SHA-256
+`31110189fbd6f3818e75e8c20bae13a19c09cd8a87fca7a9c330467c4a2625bc` on both sides. It does not
+authorize retuning or change the confirmed pipeline behavior.
