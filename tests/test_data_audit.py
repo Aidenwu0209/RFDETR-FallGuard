@@ -11,6 +11,7 @@ from fallguard.data_audit import (
     posture_profile,
     validate_training_audit,
 )
+from fallguard.dataset_normalization import normalize_fallen_person
 from fallguard.exceptions import ConfigurationError
 
 pytestmark = pytest.mark.unit
@@ -113,3 +114,83 @@ def test_training_gate_detects_post_audit_image_changes(tmp_path) -> None:
     changed.write_bytes(changed.read_bytes() + b"changed")
     with pytest.raises(ConfigurationError, match="changed after audit"):
         validate_training_audit(audit_path, tmp_path, class_names)
+
+
+def test_normalization_drops_only_unused_duplicate_and_preserves_source(tmp_path) -> None:
+    source = tmp_path / "raw"
+    duplicate_categories = [
+        {"id": 0, "name": "fallen", "supercategory": "none"},
+        {"id": 1, "name": "fallen", "supercategory": "fallen"},
+        {"id": 2, "name": "lying", "supercategory": "fallen"},
+        {"id": 3, "name": "sitting", "supercategory": "fallen"},
+        {"id": 4, "name": "standing", "supercategory": "fallen"},
+    ]
+    for directory in ("train", "valid", "test"):
+        split = source / directory
+        split.mkdir(parents=True)
+        image = Image.new("RGB", (32, 24), color=(20, 40, 60))
+        image.save(split / "sample.png")
+        coco = {
+            "images": [{"id": 1, "file_name": "sample.png", "width": 32, "height": 24}],
+            "annotations": [
+                {
+                    "id": 1,
+                    "image_id": 1,
+                    "category_id": 1,
+                    "bbox": [1, 1, 10, 10],
+                    "area": 100,
+                    "iscrowd": 0,
+                }
+            ],
+            "categories": duplicate_categories,
+        }
+        (split / "_annotations.coco.json").write_text(json.dumps(coco), encoding="utf-8")
+
+    source_annotation = (source / "train/_annotations.coco.json").read_bytes()
+    output = tmp_path / "processed" / "dataset"
+    report = normalize_fallen_person(source, output)
+    normalized = json.loads((output / "train/_annotations.coco.json").read_text())
+
+    assert (source / "train/_annotations.coco.json").read_bytes() == source_annotation
+    assert report["source_category_usage_all_splits"]["0"] == 0
+    assert report["source_category_usage_all_splits"]["1"] == 3
+    assert report["old_to_new_category_id"] == {"0": 0, "1": 0, "2": 1, "3": 2, "4": 3}
+    assert [category["name"] for category in normalized["categories"]] == [
+        "fallen",
+        "lying",
+        "sitting",
+        "standing",
+    ]
+    assert normalized["annotations"][0]["category_id"] == 0
+    assert audit_fallen_person(output)["training_ready"] is True
+
+
+def test_normalization_rejects_ambiguous_used_duplicate_categories(tmp_path) -> None:
+    source = tmp_path / "raw"
+    duplicate_categories = [
+        {"id": 0, "name": "fallen"},
+        {"id": 1, "name": "fallen"},
+        {"id": 2, "name": "lying"},
+        {"id": 3, "name": "sitting"},
+        {"id": 4, "name": "standing"},
+    ]
+    for split_index, directory in enumerate(("train", "valid", "test")):
+        split = source / directory
+        split.mkdir(parents=True)
+        Image.new("RGB", (32, 24)).save(split / "sample.png")
+        coco = {
+            "images": [{"id": 1, "file_name": "sample.png", "width": 32, "height": 24}],
+            "annotations": [
+                {
+                    "id": 1,
+                    "image_id": 1,
+                    "category_id": split_index % 2,
+                    "bbox": [1, 1, 10, 10],
+                }
+            ],
+            "categories": duplicate_categories,
+        }
+        (split / "_annotations.coco.json").write_text(json.dumps(coco), encoding="utf-8")
+
+    with pytest.raises(ConfigurationError, match="ambiguous"):
+        normalize_fallen_person(source, tmp_path / "normalized")

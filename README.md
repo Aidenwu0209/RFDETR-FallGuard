@@ -91,13 +91,25 @@ python scripts/validate_official_model.py data/smoke/bus.jpg \
 
 ## Training and evaluation entry points
 
-First audit an extracted Roboflow COCO export. The audit verifies images, annotations, class IDs,
-hashes, bounding boxes, and cross-split exact/near duplicates, then emits the only class-order
-profile accepted by the training gate:
+First normalize the extracted Roboflow COCO export into an independent copy. Export v1 contains
+an unused duplicate `fallen` category and hierarchy metadata that RF-DETR 1.9.1 would interpret
+incorrectly. Normalization preserves the raw export, records archive/annotation hashes and the
+category mapping, then emits four flat contiguous categories:
+
+```bash
+python scripts/normalize_fallen_person.py \
+  --source-dir data/raw/fallen-person \
+  --output-dir data/processed/fallen-person/dataset \
+  --source-archive 'data/raw/fallen-person-archive/Fallen Person.v1i.coco.zip'
+```
+
+Audit that normalized copy. The audit verifies images, annotations, class IDs, hashes, bounding
+boxes, and cross-split exact/near duplicates, then emits the only class-order profile accepted by
+the training gate:
 
 ```bash
 python scripts/prepare_fallen_person.py \
-  --dataset-dir data/raw/fallen-person \
+  --dataset-dir data/processed/fallen-person/dataset \
   --output-dir data/processed/fallen-person
 ```
 
@@ -106,7 +118,7 @@ only with `--execute`. Nano and Small use the same audited class mapping and dat
 
 ```bash
 python scripts/train_detector.py \
-  --dataset-dir data/raw/fallen-person \
+  --dataset-dir data/processed/fallen-person/dataset \
   --dataset-audit data/processed/fallen-person/audit.json \
   --config data/processed/fallen-person/posture_profile.yaml \
   --weights weights/official/rf-detr-nano.pth \
@@ -115,7 +127,7 @@ python scripts/train_detector.py \
   --epochs 2 --batch-size 1 --grad-accum-steps 4 --execute
 
 python scripts/train_detector.py \
-  --dataset-dir data/raw/fallen-person \
+  --dataset-dir data/processed/fallen-person/dataset \
   --dataset-audit data/processed/fallen-person/audit.json \
   --config data/processed/fallen-person/posture_profile.yaml \
   --weights weights/official/rf-detr-small.pth \
@@ -124,7 +136,7 @@ python scripts/train_detector.py \
   --epochs 2 --batch-size 1 --grad-accum-steps 4 --execute
 
 python scripts/evaluate_detector.py \
-  --dataset-dir data/raw/fallen-person \
+  --dataset-dir data/processed/fallen-person/dataset \
   --weights checkpoints/small/checkpoint_best_total.pth \
   --split test
 

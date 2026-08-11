@@ -25,6 +25,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
         "prepare_gmdcsa24.py",
         "validate_grouped_pipeline.py",
         "check_api_configuration.py",
+        "normalize_fallen_person.py",
         "prepare_fallen_person.py",
         "generate_threshold_candidates.py",
         "select_thresholds.py",
