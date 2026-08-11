@@ -89,6 +89,16 @@ def test_fallen_person_audit_uses_sorted_coco_ids_and_emits_profile(tmp_path) ->
     assert "warning" not in profile["detector"]["posture_groups"]
 
 
+def test_fallen_person_audit_accepts_relative_dataset_root(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    dataset = tmp_path / "dataset"
+    build_dataset(dataset)
+    monkeypatch.chdir(tmp_path)
+    audit = audit_fallen_person("dataset")
+    assert audit["dataset_root"] == str(dataset.resolve())
+
+
 def test_fallen_person_audit_rejects_metadata_dimension_mismatch(tmp_path) -> None:
     build_dataset(tmp_path, wrong_width=True)
     with pytest.raises(ConfigurationError, match="dimensions disagree"):

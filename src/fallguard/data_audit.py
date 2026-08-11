@@ -154,7 +154,7 @@ def _audit_split(
         if (
             not isinstance(bbox, list)
             or len(bbox) != 4
-            or any(not isinstance(value, (int, float)) for value in bbox)
+            or any(not isinstance(value, int | float) for value in bbox)
             or any(not math.isfinite(float(value)) for value in bbox)
         ):
             raise ConfigurationError(f"annotation {annotation_id} has invalid bbox")
@@ -189,7 +189,7 @@ def _audit_split(
 def audit_fallen_person(
     dataset_root: str | Path, *, near_duplicate_distance: int = 4
 ) -> dict[str, Any]:
-    root = Path(dataset_root)
+    root = Path(dataset_root).resolve()
     if not root.is_dir():
         raise ConfigurationError(f"dataset root does not exist: {root}")
     split_summaries: dict[str, dict[str, Any]] = {}
