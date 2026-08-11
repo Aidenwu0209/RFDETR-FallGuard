@@ -20,6 +20,7 @@ class EventManager:
         self._events: dict[str, FallEvent] = {}
         self._active_by_track: dict[TrackKey, str] = {}
         self._last_by_track: dict[TrackKey, str] = {}
+        self._pending_by_track: dict[TrackKey, TransitionRecord] = {}
 
     def _replace(self, event: FallEvent, **updates: object) -> FallEvent:
         """Apply coupled lifecycle fields as one validated state transition."""
@@ -48,14 +49,28 @@ class EventManager:
                 self._last_by_track[key] = event.event_id
             return event
 
-        if transition.next_state != MotionState.SUSPECTED:
+        if transition.next_state == MotionState.SUSPECTED:
+            self._pending_by_track[key] = transition
             return None
+
+        if transition.next_state in {MotionState.UPRIGHT, MotionState.RESOLVED}:
+            self._pending_by_track.pop(key, None)
+            return None
+
+        if transition.next_state not in {MotionState.FALLING, MotionState.LYING}:
+            return None
+
+        pending = self._pending_by_track.pop(key, None)
+        start = pending or transition
+        reasons = [start.reason]
+        if transition.reason != start.reason:
+            reasons.append(transition.reason)
 
         previous_id = self._last_by_track.get(key)
         if previous_id is not None:
             previous = self._events[previous_id]
             assert previous.end_time is not None
-            gap = transition.timestamp_seconds - previous.end_time
+            gap = start.timestamp_seconds - previous.end_time
             if gap <= self.config.merge_gap_seconds:
                 previous = self._replace(
                     previous,
@@ -64,23 +79,25 @@ class EventManager:
                     status=EventStatus.ACTIVE,
                     transition_reasons=[
                         *previous.transition_reasons,
-                        "merged: " + transition.reason,
+                        *("merged: " + reason for reason in reasons),
                     ],
                 )
                 self._active_by_track[key] = previous.event_id
                 return previous
             if gap <= self.config.cooldown_seconds:
-                previous.metadata["cooldown_suppressed_candidate_at"] = transition.timestamp_seconds
+                previous.metadata["cooldown_suppressed_candidate_at"] = start.timestamp_seconds
                 return previous
 
         event = FallEvent(
             track_id=transition.track_id,
             source_id=transition.source_id,
             session_id=transition.session_id,
-            start_frame=transition.frame_id,
-            start_time=transition.timestamp_seconds,
-            transition_reasons=[transition.reason],
+            start_frame=start.frame_id,
+            start_time=start.timestamp_seconds,
+            transition_reasons=reasons,
         )
+        if transition.next_state == MotionState.LYING:
+            event.metadata["lying_started_at_seconds"] = transition.timestamp_seconds
         self._events[event.event_id] = event
         self._active_by_track[key] = event.event_id
         return event

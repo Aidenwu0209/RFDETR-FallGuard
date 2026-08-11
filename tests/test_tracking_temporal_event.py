@@ -229,15 +229,27 @@ def test_event_manager_merges_nearby_episode_and_suppresses_cooldown(
     development_config,
 ) -> None:
     manager = EventManager(development_config.event)
-    first = manager.on_transition(transition(0, 0.0, MotionState.UPRIGHT, MotionState.SUSPECTED))
+    assert (
+        manager.on_transition(transition(0, 0.0, MotionState.UPRIGHT, MotionState.SUSPECTED))
+        is None
+    )
+    first = manager.on_transition(transition(1, 0.5, MotionState.SUSPECTED, MotionState.FALLING))
     assert first is not None
-    manager.on_transition(transition(1, 1.0, MotionState.RECOVERING, MotionState.RESOLVED))
-    merged = manager.on_transition(transition(2, 2.0, MotionState.RESOLVED, MotionState.SUSPECTED))
+    manager.on_transition(transition(2, 1.0, MotionState.RECOVERING, MotionState.RESOLVED))
+    assert (
+        manager.on_transition(transition(3, 2.0, MotionState.RESOLVED, MotionState.SUSPECTED))
+        is None
+    )
+    merged = manager.on_transition(transition(4, 2.5, MotionState.SUSPECTED, MotionState.FALLING))
     assert merged is not None and merged.event_id == first.event_id
     assert merged.status == EventStatus.ACTIVE
-    manager.on_transition(transition(3, 3.0, MotionState.RECOVERING, MotionState.RESOLVED))
+    manager.on_transition(transition(5, 3.0, MotionState.RECOVERING, MotionState.RESOLVED))
+    assert (
+        manager.on_transition(transition(6, 6.0, MotionState.RESOLVED, MotionState.SUSPECTED))
+        is None
+    )
     suppressed = manager.on_transition(
-        transition(4, 6.0, MotionState.RESOLVED, MotionState.SUSPECTED)
+        transition(7, 6.5, MotionState.SUSPECTED, MotionState.FALLING)
     )
     assert suppressed is not None and suppressed.event_id == first.event_id
     assert suppressed.metadata["cooldown_suppressed_candidate_at"] == 6.0
@@ -246,10 +258,29 @@ def test_event_manager_merges_nearby_episode_and_suppresses_cooldown(
 
 def test_event_manager_timeout_closes_coupled_end_fields(development_config) -> None:
     manager = EventManager(development_config.event)
-    event = manager.on_transition(transition(0, 0.0, MotionState.UPRIGHT, MotionState.SUSPECTED))
+    assert (
+        manager.on_transition(transition(0, 0.0, MotionState.UPRIGHT, MotionState.SUSPECTED))
+        is None
+    )
+    event = manager.on_transition(transition(1, 0.5, MotionState.SUSPECTED, MotionState.FALLING))
     assert event is not None
     timed_out = manager.tick(development_config.event.timeout_seconds + 0.1, frame_id=99)
     assert len(timed_out) == 1
     assert timed_out[0].status == EventStatus.TIMED_OUT
     assert timed_out[0].end_frame == 99
     assert timed_out[0].end_time == pytest.approx(development_config.event.timeout_seconds + 0.1)
+
+
+def test_event_manager_discards_candidate_that_never_reaches_falling(
+    development_config,
+) -> None:
+    manager = EventManager(development_config.event)
+    assert (
+        manager.on_transition(transition(0, 0.0, MotionState.UPRIGHT, MotionState.SUSPECTED))
+        is None
+    )
+    assert (
+        manager.on_transition(transition(1, 0.2, MotionState.SUSPECTED, MotionState.UPRIGHT))
+        is None
+    )
+    assert manager.all_events() == []
