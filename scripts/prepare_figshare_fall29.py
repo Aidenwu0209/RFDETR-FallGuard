@@ -128,6 +128,29 @@ def build_manifest(root: Path, per_subject_label: int) -> dict[str, Any]:
         missing = sorted(EXPECTED_SUBJECTS - observed_subjects)
         extra = sorted(observed_subjects - EXPECTED_SUBJECTS)
         raise ValueError(f"subject inventory mismatch: missing={missing}, extra={extra}")
+    source_subject_video_count = len(records)
+    duplicate_videos_excluded: list[dict[str, str]] = []
+    records_by_hash: dict[str, list[dict[str, Any]]] = {}
+    for record in records:
+        records_by_hash.setdefault(str(record["sha256"]), []).append(record)
+    deduplicated_records: list[dict[str, Any]] = []
+    for content_hash, group in sorted(records_by_hash.items()):
+        ordered = sorted(group, key=lambda record: str(record["relative_path"]))
+        identities = {
+            (record["subject_id"], record["label"], record["partition"]) for record in ordered
+        }
+        if len(identities) != 1:
+            raise ValueError(f"cross-group duplicate video content: {content_hash}")
+        deduplicated_records.append(ordered[0])
+        for duplicate in ordered[1:]:
+            duplicate_videos_excluded.append(
+                {
+                    "sha256": content_hash,
+                    "kept": str(ordered[0]["relative_path"]),
+                    "excluded": str(duplicate["relative_path"]),
+                }
+            )
+    records = deduplicated_records
     for subject_id in sorted(EXPECTED_SUBJECTS):
         for label in ("adl", "fall"):
             group = sorted(
@@ -178,8 +201,10 @@ def build_manifest(root: Path, per_subject_label: int) -> dict[str, Any]:
             ),
         },
         "audit": {
+            "source_subject_videos": source_subject_video_count,
             "subject_videos": len(records),
             "auxiliary_videos_excluded": sorted(auxiliary_videos),
+            "duplicate_videos_excluded": duplicate_videos_excluded,
             "subjects": sorted(subject_partitions),
             "labels": dict(sorted(label_counts.items())),
             "partitions": dict(sorted(partition_counts.items())),

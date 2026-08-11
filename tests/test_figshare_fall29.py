@@ -34,6 +34,9 @@ def test_manifest_preserves_subject_groups_and_excludes_auxiliary_videos(
                 path.write_bytes(f"{subject}-{label_dir}-{index}".encode())
     auxiliary = root / "Fall" / "timelapse_20x.mp4"
     auxiliary.write_bytes(b"auxiliary")
+    duplicate = root / "Fall" / "SBJ_02_LOC1" / "ACT9" / "duplicate.mp4"
+    duplicate.parent.mkdir(parents=True, exist_ok=True)
+    duplicate.write_bytes(b"2-Fall-0")
 
     def fake_digest(path: Path, algorithm: str = "md5") -> str:
         return hashlib.new(algorithm, path.read_bytes()).hexdigest()
@@ -66,3 +69,6 @@ def test_manifest_preserves_subject_groups_and_excludes_auxiliary_videos(
     }
     assert manifest["audit"]["subject_leakage"] is False
     assert manifest["audit"]["auxiliary_videos_excluded"] == ["Fall/timelapse_20x.mp4"]
+    assert manifest["audit"]["source_subject_videos"] == 85
+    assert len(manifest["audit"]["duplicate_videos_excluded"]) == 1
+    assert manifest["audit"]["duplicate_content_hashes"] == []

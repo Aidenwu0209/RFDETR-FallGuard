@@ -1,7 +1,7 @@
 protocol_id: figshare-fall29-v1
 status: predeclared_before_pipeline_evaluation
-revision: 2
-revision_reason: balance subject groups using audited label availability before model inference
+revision: 3
+revision_reason: balance audited labels and exclude one exact within-subject duplicate before inference
 model_results_seen_before_revision: false
 dataset:
   name: Video-Based Fall Detection Dataset with 2017 Activities from 29 Subjects
