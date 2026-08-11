@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import math
 import shutil
 import tempfile
 from collections import Counter, defaultdict
@@ -13,6 +14,8 @@ from typing import Any
 
 from fallguard.data_audit import EXPECTED_FALLEN_PERSON_CLASSES, ROBOFLOW_SPLITS
 from fallguard.exceptions import ConfigurationError
+
+MAX_ROUNDING_CLIP_PIXELS = 0.05
 
 
 def _sha256(path: Path) -> str:
@@ -185,8 +188,78 @@ def normalize_fallen_person(
 
             normalized_coco = copy.deepcopy(coco)
             normalized_coco["categories"] = normalized_categories
+            images_by_id = {
+                image["id"]: image
+                for image in normalized_coco["images"]
+                if isinstance(image, dict) and isinstance(image.get("id"), int)
+            }
+            bbox_adjustments: list[dict[str, Any]] = []
+            maximum_bbox_clip = 0.0
             for annotation in normalized_coco["annotations"]:
                 annotation["category_id"] = old_to_new[annotation["category_id"]]
+                annotation_id = annotation.get("id")
+                image = images_by_id.get(annotation.get("image_id"))
+                bbox = annotation.get("bbox")
+                if (
+                    image is None
+                    or not isinstance(image.get("width"), int)
+                    or not isinstance(image.get("height"), int)
+                    or not isinstance(bbox, list)
+                    or len(bbox) != 4
+                    or any(not isinstance(value, int | float) for value in bbox)
+                    or any(not math.isfinite(float(value)) for value in bbox)
+                ):
+                    raise ConfigurationError(
+                        f"annotation {annotation_id} has invalid image metadata or bbox"
+                    )
+                x, y, width, height = (float(value) for value in bbox)
+                if width <= 0 or height <= 0:
+                    raise ConfigurationError(f"annotation {annotation_id} has non-positive bbox")
+                x2 = x + width
+                y2 = y + height
+                image_width = float(image["width"])
+                image_height = float(image["height"])
+                clipped_x1 = min(max(x, 0.0), image_width)
+                clipped_y1 = min(max(y, 0.0), image_height)
+                clipped_x2 = min(max(x2, 0.0), image_width)
+                clipped_y2 = min(max(y2, 0.0), image_height)
+                clip_amount = max(
+                    abs(clipped_x1 - x),
+                    abs(clipped_y1 - y),
+                    abs(clipped_x2 - x2),
+                    abs(clipped_y2 - y2),
+                )
+                if clip_amount > MAX_ROUNDING_CLIP_PIXELS + 1e-9:
+                    raise ConfigurationError(
+                        f"annotation {annotation_id} exceeds the allowed rounding clip: "
+                        f"{clip_amount:.6f} pixels"
+                    )
+                clipped_width = clipped_x2 - clipped_x1
+                clipped_height = clipped_y2 - clipped_y1
+                if clipped_width <= 0 or clipped_height <= 0:
+                    raise ConfigurationError(
+                        f"annotation {annotation_id} becomes empty after boundary clipping"
+                    )
+                if clip_amount > 0:
+                    original_bbox = list(annotation["bbox"])
+                    annotation["bbox"] = [
+                        clipped_x1,
+                        clipped_y1,
+                        clipped_width,
+                        clipped_height,
+                    ]
+                    if "area" in annotation:
+                        annotation["area"] = clipped_width * clipped_height
+                    maximum_bbox_clip = max(maximum_bbox_clip, clip_amount)
+                    if len(bbox_adjustments) < 20:
+                        bbox_adjustments.append(
+                            {
+                                "annotation_id": annotation_id,
+                                "original_bbox": original_bbox,
+                                "normalized_bbox": annotation["bbox"],
+                                "maximum_clip_pixels": clip_amount,
+                            }
+                        )
             target_annotation = target_split / "_annotations.coco.json"
             target_annotation.write_text(
                 json.dumps(normalized_coco, indent=2, ensure_ascii=False) + "\n",
@@ -205,6 +278,15 @@ def normalize_fallen_person(
                     )
                     for category in reference_schema
                 },
+                "bbox_rounding_adjustments": sum(
+                    1
+                    for original, normalized in zip(
+                        coco["annotations"], normalized_coco["annotations"], strict=True
+                    )
+                    if original.get("bbox") != normalized.get("bbox")
+                ),
+                "maximum_bbox_clip_pixels": maximum_bbox_clip,
+                "bbox_rounding_adjustment_examples": bbox_adjustments,
             }
 
         for name in ("README.dataset.txt", "README.roboflow.txt"):
@@ -237,6 +319,10 @@ def normalize_fallen_person(
             ],
             "normalized_categories": normalized_categories,
             "supercategory_policy": "flattened to 'none' to prevent hierarchy inference",
+            "bbox_policy": (
+                "clip only export-rounding overflow at image boundaries; "
+                f"maximum allowed correction is {MAX_ROUNDING_CLIP_PIXELS} pixels"
+            ),
             "image_materialization": "independent byte copies; raw source is not modified",
             "splits": split_reports,
         }

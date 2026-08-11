@@ -147,8 +147,8 @@ def test_normalization_drops_only_unused_duplicate_and_preserves_source(tmp_path
                     "id": 1,
                     "image_id": 1,
                     "category_id": 1,
-                    "bbox": [1, 1, 10, 10],
-                    "area": 100,
+                    "bbox": [1, 1, 31.01, 23.01],
+                    "area": 713.5401,
                     "iscrowd": 0,
                 }
             ],
@@ -165,6 +165,8 @@ def test_normalization_drops_only_unused_duplicate_and_preserves_source(tmp_path
     assert report["source_category_usage_all_splits"]["0"] == 0
     assert report["source_category_usage_all_splits"]["1"] == 3
     assert report["old_to_new_category_id"] == {"0": 0, "1": 0, "2": 1, "3": 2, "4": 3}
+    assert report["splits"]["train"]["bbox_rounding_adjustments"] == 1
+    assert report["splits"]["train"]["maximum_bbox_clip_pixels"] == pytest.approx(0.01)
     assert [category["name"] for category in normalized["categories"]] == [
         "fallen",
         "lying",
@@ -172,6 +174,8 @@ def test_normalization_drops_only_unused_duplicate_and_preserves_source(tmp_path
         "standing",
     ]
     assert normalized["annotations"][0]["category_id"] == 0
+    assert normalized["annotations"][0]["bbox"] == [1.0, 1.0, 31.0, 23.0]
+    assert normalized["annotations"][0]["area"] == 713.0
     assert audit_fallen_person(output)["training_ready"] is True
 
 
