@@ -1,0 +1,20 @@
+runtime:
+  profile: experiment
+detector:
+  mode: posture_multiclass
+  class_names: {}
+temporal:
+  aspect_ratio_fall_min: null
+  vertical_speed_frame_height_per_second_min: null
+  suspect_duration_seconds: null
+  lying_duration_seconds: null
+  upright_aspect_ratio_max: null
+  track_timeout_seconds: null
+semantic:
+  provider: none
+  model: null
+  allow_fallback: false
+  allow_mock: false
+  fallback_providers: []
+benchmark:
+  formal: true

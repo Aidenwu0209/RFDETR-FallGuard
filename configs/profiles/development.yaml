@@ -1,0 +1,19 @@
+runtime:
+  profile: development
+detector:
+  mode: person_only
+temporal:
+  aspect_ratio_fall_min: 0.9
+  vertical_speed_frame_height_per_second_min: 0.25
+  suspect_duration_seconds: 0.4
+  lying_duration_seconds: 0.8
+  upright_aspect_ratio_max: 0.72
+  track_timeout_seconds: 1.0
+semantic:
+  provider: mock
+  model: deterministic-rule-v1
+  allow_fallback: true
+  allow_mock: true
+  fallback_providers: []
+benchmark:
+  formal: false

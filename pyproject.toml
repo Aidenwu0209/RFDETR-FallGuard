@@ -1,0 +1,76 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rfdetr-fallguard"
+version = "0.1.0"
+description = "Provider-agnostic, event-level fall monitoring built around RF-DETR"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "RFDETR-FallGuard contributors" }]
+dependencies = [
+  "httpx>=0.27,<1",
+  "numpy>=1.26,<3",
+  "opencv-python-headless>=4.9,<5",
+  "Pillow>=10,<13",
+  "psutil>=5.9,<8",
+  "pydantic>=2.12,<3",
+  "PyYAML>=6,<7",
+]
+
+[project.optional-dependencies]
+dev = [
+  "mypy>=1.13,<2",
+  "pytest>=8.3,<9",
+  "pytest-cov>=5,<7",
+  "ruff>=0.9,<1",
+  "types-psutil>=7,<8",
+  "types-PyYAML>=6,<7",
+]
+rfdetr = ["rfdetr==1.9.1"]
+tracking = ["supervision==0.30.0"]
+ui = ["gradio==6.22.0"]
+cloud = ["openai==2.53.0"]
+local-vlm = [
+  "accelerate>=1.2,<2",
+  "bitsandbytes>=0.45,<1; platform_system == 'Linux'",
+  "datasets>=3.2,<5",
+  "peft==0.20.0",
+  "transformers==5.15.0",
+]
+export = ["onnx>=1.17,<2", "onnxruntime>=1.20,<2"]
+
+[project.scripts]
+fallguard = "fallguard.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fallguard", "app"]
+
+[tool.pytest.ini_options]
+addopts = "-ra -m 'not gpu and not api and not slow'"
+testpaths = ["tests"]
+markers = [
+  "unit: isolated deterministic behavior",
+  "integration: multi-module or process integration without paid services",
+  "gpu: requires a compatible real GPU and model stack",
+  "api: may contact a real external API and is opt-in",
+  "slow: intentionally long-running validation",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["experiments", "artifacts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_ignores = true
+ignore_missing_imports = true

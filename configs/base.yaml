@@ -1,0 +1,73 @@
+schema_version: 1
+runtime:
+  profile: development
+  source_id: default-source
+  session_id: null
+  log_level: INFO
+  log_json: true
+  device: auto
+detector:
+  backend: rfdetr
+  model_variant: small
+  mode: person_only
+  weights_path: null
+  allow_weight_download: false
+  confidence_threshold: 0.5
+  person_class_names: [person]
+  class_names:
+    0: person
+  class_aliases: {}
+  posture_groups:
+    upright: [standing, sitting, person]
+    ambiguous: [bending, crouching]
+    fall: [falling]
+    lying: [lying]
+tracking:
+  backend: bytetrack
+  track_activation_threshold: 0.25
+  lost_track_buffer: 30
+  minimum_matching_threshold: 0.8
+  minimum_consecutive_frames: 1
+  frame_rate: 30
+temporal:
+  smoothing_window: 5
+  aspect_ratio_fall_min: null
+  vertical_speed_frame_height_per_second_min: null
+  suspect_duration_seconds: null
+  lying_duration_seconds: null
+  upright_aspect_ratio_max: null
+  track_timeout_seconds: null
+event:
+  merge_gap_seconds: 2.0
+  cooldown_seconds: 5.0
+  timeout_seconds: 10.0
+  ring_buffer_frames: 180
+  before_offset_seconds: 1.0
+  after_offset_seconds: 1.0
+semantic:
+  provider: mock
+  model: deterministic-rule-v1
+  fallback_providers: []
+  allow_fallback: false
+  allow_mock: false
+  allow_cloud_images: false
+  max_images: 3
+  timeout_seconds: 30.0
+  openai_base_url: null
+  deepseek_base_url: https://api.deepseek.com
+  local_model_path: null
+alert:
+  alert_on_semantic_fall: true
+  alert_on_semantic_uncertain: false
+  high_temporal_risk_can_alert: false
+privacy:
+  retain_full_frames: false
+  retain_person_crops: true
+  hash_algorithm: sha256
+benchmark:
+  formal: false
+  warmup_iterations: 10
+  measured_iterations: 100
+  include_decode: false
+  include_ui: false
+  include_network: false
