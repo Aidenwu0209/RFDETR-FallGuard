@@ -20,10 +20,13 @@ EXPECTED_ARCHIVE_BYTES = 2_529_520_868
 EXPECTED_ARCHIVE_MD5 = "c784167d08f2fa94e3afd36cec758e1f"
 EXPECTED_SUBJECTS = set(range(1, 30))
 SUBJECT_PATTERN = re.compile(r"SBJ_(\d+)_LOC(\d+)")
+DEVELOPMENT_SUBJECTS = [1, 2, 3, 4, 5, 6, 7, 11, 12, 15, 16, 17, 19, 23, 24, 25, 26]
+VALIDATION_SUBJECTS = [8, 9, 10, 18, 21, 27, 28]
+LOCKED_TEST_SUBJECTS = [13, 14, 20, 22, 29]
 SUBJECT_PARTITIONS = {
-    **{subject: "threshold_development" for subject in range(1, 18)},
-    **{subject: "threshold_validation" for subject in range(18, 24)},
-    **{subject: "locked_test" for subject in range(24, 30)},
+    **{subject: "threshold_development" for subject in DEVELOPMENT_SUBJECTS},
+    **{subject: "threshold_validation" for subject in VALIDATION_SUBJECTS},
+    **{subject: "locked_test" for subject in LOCKED_TEST_SUBJECTS},
 }
 
 
@@ -135,7 +138,7 @@ def build_manifest(root: Path, per_subject_label: int) -> dict[str, Any]:
                 ),
                 key=lambda record: str(record["relative_path"]),
             )
-            if len(group) < per_subject_label:
+            if group and len(group) < per_subject_label:
                 raise ValueError(f"subject {subject_id} label {label} has only {len(group)} videos")
             for record in group[:per_subject_label]:
                 record["small_validation_subset"] = True
@@ -148,6 +151,12 @@ def build_manifest(root: Path, per_subject_label: int) -> dict[str, Any]:
     duplicate_hashes = sorted(value for value, count in Counter(hashes).items() if count > 1)
     label_counts = Counter(str(record["label"]) for record in records)
     partition_counts = Counter(str(record["partition"]) for record in records)
+    subject_label_availability = {
+        str(subject_id): sorted(
+            {str(record["label"]) for record in records if record["subject_id"] == subject_id}
+        )
+        for subject_id in sorted(EXPECTED_SUBJECTS)
+    }
     return {
         "dataset": "Video-Based Fall Detection Dataset with 2017 Activities from 29 Subjects",
         "short_name": "Figshare-Fall29",
@@ -157,11 +166,11 @@ def build_manifest(root: Path, per_subject_label: int) -> dict[str, Any]:
         "repository_license": "CC BY 4.0",
         "protocol": {
             "partition_unit": "subject",
-            "threshold_development": list(range(1, 18)),
-            "threshold_validation": list(range(18, 24)),
-            "locked_test": list(range(24, 30)),
+            "threshold_development": DEVELOPMENT_SUBJECTS,
+            "threshold_validation": VALIDATION_SUBJECTS,
+            "locked_test": LOCKED_TEST_SUBJECTS,
             "small_subset_selection": (
-                f"first {per_subject_label} sorted videos per subject/label"
+                f"first {per_subject_label} sorted available videos per subject/label"
             ),
             "detection_delay_available": False,
             "detection_delay_unavailable_reason": (
@@ -174,6 +183,7 @@ def build_manifest(root: Path, per_subject_label: int) -> dict[str, Any]:
             "subjects": sorted(subject_partitions),
             "labels": dict(sorted(label_counts.items())),
             "partitions": dict(sorted(partition_counts.items())),
+            "subject_label_availability": subject_label_availability,
             "duplicate_content_hashes": duplicate_hashes,
             "subject_leakage": False,
         },
@@ -202,7 +212,7 @@ def validate_protocol_declaration(
         if partition.get(key) != manifest["protocol"][key]:
             raise ValueError(f"protocol declaration {key} differs from the manifest")
     if partition.get("small_subset_selection") != (
-        f"first {per_subject_label} sorted videos per subject and clip label"
+        f"first {per_subject_label} sorted available videos per subject and clip label"
     ):
         raise ValueError("protocol declaration small-subset rule differs from the manifest")
     candidates = declaration.get("candidates")

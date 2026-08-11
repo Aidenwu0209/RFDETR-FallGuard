@@ -1,5 +1,8 @@
 protocol_id: figshare-fall29-v1
 status: predeclared_before_pipeline_evaluation
+revision: 2
+revision_reason: balance subject groups using audited label availability before model inference
+model_results_seen_before_revision: false
 dataset:
   name: Video-Based Fall Detection Dataset with 2017 Activities from 29 Subjects
   short_name: Figshare-Fall29
@@ -11,10 +14,15 @@ dataset:
   archive_md5: c784167d08f2fa94e3afd36cec758e1f
 partition:
   unit: subject
-  threshold_development: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
-  threshold_validation: [18, 19, 20, 21, 22, 23]
-  locked_test: [24, 25, 26, 27, 28, 29]
-  small_subset_selection: first 2 sorted videos per subject and clip label
+  split_basis: balanced available clip labels before any model evaluation
+  threshold_development: [1, 2, 3, 4, 5, 6, 7, 11, 12, 15, 16, 17, 19, 23, 24, 25, 26]
+  threshold_validation: [8, 9, 10, 18, 21, 27, 28]
+  locked_test: [13, 14, 20, 22, 29]
+  small_subset_selection: first 2 sorted available videos per subject and clip label
+  expected_small_subset:
+    threshold_development: {clips: 48, fall: 24, adl: 24}
+    threshold_validation: {clips: 20, fall: 10, adl: 10}
+    locked_test: {clips: 16, fall: 8, adl: 8}
 models:
   variants: [nano, small]
   nano_checkpoint_sha256: 3d190d2450a1dffcd2340e198f66d14475c9f1f1f0cd3fcc0246d7edba77cc6f

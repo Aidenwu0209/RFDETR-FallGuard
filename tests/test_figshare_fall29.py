@@ -20,8 +20,14 @@ def test_manifest_preserves_subject_groups_and_excludes_auxiliary_videos(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = tmp_path / "VideoDataset"
+    both_labels = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 14, 20}
+    fall_only = {11, 12, 15, 16, 17, 18, 21, 22}
     for subject in range(1, 30):
         for label_dir in ("ADL", "Fall"):
+            if label_dir == "ADL" and subject in fall_only:
+                continue
+            if label_dir == "Fall" and subject not in both_labels | fall_only:
+                continue
             for index in range(2):
                 path = root / label_dir / f"SBJ_{subject:02d}_LOC1" / f"ACT{index}" / "clip.mp4"
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -47,10 +53,16 @@ def test_manifest_preserves_subject_groups_and_excludes_auxiliary_videos(
 
     manifest = MODULE.build_manifest(root, per_subject_label=2)
     records = manifest["records"]
-    assert len(records) == 116
+    assert len(records) == 84
     assert all(record["small_validation_subset"] for record in records)
-    assert manifest["protocol"]["threshold_development"] == list(range(1, 18))
-    assert manifest["protocol"]["threshold_validation"] == list(range(18, 24))
-    assert manifest["protocol"]["locked_test"] == list(range(24, 30))
+    assert manifest["protocol"]["threshold_development"] == MODULE.DEVELOPMENT_SUBJECTS
+    assert manifest["protocol"]["threshold_validation"] == MODULE.VALIDATION_SUBJECTS
+    assert manifest["protocol"]["locked_test"] == MODULE.LOCKED_TEST_SUBJECTS
+    assert manifest["audit"]["labels"] == {"adl": 42, "fall": 42}
+    assert manifest["audit"]["partitions"] == {
+        "locked_test": 16,
+        "threshold_development": 48,
+        "threshold_validation": 20,
+    }
     assert manifest["audit"]["subject_leakage"] is False
     assert manifest["audit"]["auxiliary_videos_excluded"] == ["Fall/timelapse_20x.mp4"]
