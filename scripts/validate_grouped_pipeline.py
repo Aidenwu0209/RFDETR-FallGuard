@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import subprocess
@@ -38,6 +39,20 @@ def implementation_git_commit() -> str:
     if result.returncode != 0 or GIT_COMMIT_PATTERN.fullmatch(revision) is None:
         raise ConfigurationError("cannot resolve a valid implementation Git commit")
     return revision
+
+
+def pipeline_implementation_sha256() -> str:
+    project_root = Path(__file__).resolve().parents[1]
+    sources = sorted((project_root / "src/fallguard").rglob("*.py"))
+    sources.append(Path(__file__).resolve())
+    digest = hashlib.sha256()
+    for source in sources:
+        relative = source.relative_to(project_root)
+        digest.update(str(relative).encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(source.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
 
 
 def pipeline_parameters(config: AppConfig) -> dict[str, Any]:
@@ -123,7 +138,7 @@ def main() -> None:
                 model_variant=model_variant,
                 weights_sha256=weights_sha256,
                 pipeline_parameters=parameters,
-                implementation_git_commit=implementation_git_commit(),
+                pipeline_implementation_sha256=pipeline_implementation_sha256(),
             )
         except ConfigurationError as exc:
             parser.error(str(exc))
@@ -164,6 +179,7 @@ def main() -> None:
         "validation_kind": "GROUPED_CLIP_LEVEL_INTERNAL_VALIDATION",
         "formal_generalization_claim": False,
         "implementation_git_commit": implementation_git_commit(),
+        "pipeline_implementation_sha256": pipeline_implementation_sha256(),
         "partition": args.partition,
         "subset": "all_videos" if args.all_videos else "deterministic_small_subset",
         "weights_sha256": weights_sha256,

@@ -17,11 +17,17 @@ def main() -> None:
     parser.add_argument("--config", default="configs/profiles/experiment.yaml")
     parser.add_argument("--dataset-dir", type=Path, required=True)
     parser.add_argument("--weights", type=Path, required=True)
+    parser.add_argument("--model-variant", choices=("nano", "small"))
     parser.add_argument("--split", choices=("val", "test"), default="test")
     args = parser.parse_args()
     config = load_config(args.config)
     detector = RFDETRDetector(
-        config.detector.model_copy(update={"weights_path": args.weights}),
+        config.detector.model_copy(
+            update={
+                "weights_path": args.weights,
+                "model_variant": args.model_variant or config.detector.model_variant,
+            }
+        ),
         device=config.runtime.device,
     )
     detector.load()

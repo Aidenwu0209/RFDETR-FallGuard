@@ -138,6 +138,7 @@ python scripts/train_detector.py \
 python scripts/evaluate_detector.py \
   --dataset-dir data/processed/fallen-person/dataset \
   --weights checkpoints/small/checkpoint_best_total.pth \
+  --model-variant small \
   --split test
 
 python scripts/train_semantic_adapter.py \
@@ -155,12 +156,19 @@ python scripts/prepare_gmdcsa24.py \
 ```
 
 The grouped runner requires an actual posture checkpoint and a config whose class order matches
-checkpoint metadata. Generate the four provisional candidates before looking at grouped results:
+checkpoint metadata. Generate the four stage-1 provisional candidates before looking at grouped
+results. If stage 1 fails its declared gate, generate the bounded stage-2 precision expansion;
+both operations still use S1-S2 only:
 
 ```bash
 python scripts/generate_threshold_candidates.py \
   --base-config data/processed/fallen-person/posture_profile.yaml \
   --output-dir artifacts/validation/candidates
+
+python scripts/generate_threshold_candidates.py \
+  --base-config data/processed/fallen-person/posture_profile.yaml \
+  --output-dir artifacts/validation/candidates-stage2 \
+  --include-expanded-precision-grid
 ```
 
 Run every generated candidate against the same deterministic S1-S2 subset for both Nano and
@@ -169,13 +177,13 @@ and output filename:
 
 ```bash
 python scripts/validate_grouped_pipeline.py \
-  --config artifacts/validation/candidates/high_recall.yaml \
+  --config artifacts/validation/candidates-stage2/precision_075.yaml \
   --manifest data/processed/gmdcsa24/manifest.json \
-  --dataset-root data/raw/gmdcsa24/extracted/REPOSITORY_ROOT \
+  --dataset-root data/raw/gmdcsa24/extracted/ekramalam-GMDCSA24-A-Dataset-for-Human-Fall-Detection-in-Videos-d3edb5d \
   --weights checkpoints/nano/checkpoint_best_total.pth \
   --model-variant nano \
   --partition threshold_development \
-  --output-json artifacts/validation/development/nano-high_recall.json
+  --output-json artifacts/validation/development-stage2/nano-precision_075.json
 ```
 
 Freeze one candidate using S1-S2 only. Supply every development report with a repeated
@@ -184,14 +192,14 @@ will fail rather than silently relax the gate:
 
 ```bash
 python scripts/select_thresholds.py \
-  --development-report artifacts/validation/development/nano-high_recall.json \
-  --development-report artifacts/validation/development/nano-balanced_short.json \
-  --development-report artifacts/validation/development/nano-balanced_duration.json \
-  --development-report artifacts/validation/development/nano-high_precision.json \
-  --development-report artifacts/validation/development/small-high_recall.json \
-  --development-report artifacts/validation/development/small-balanced_short.json \
-  --development-report artifacts/validation/development/small-balanced_duration.json \
-  --development-report artifacts/validation/development/small-high_precision.json \
+  --development-report artifacts/validation/development-stage2/nano-precision_060.json \
+  --development-report artifacts/validation/development-stage2/nano-precision_070.json \
+  --development-report artifacts/validation/development-stage2/nano-precision_075.json \
+  --development-report artifacts/validation/development-stage2/nano-precision_080.json \
+  --development-report artifacts/validation/development-stage2/small-precision_060.json \
+  --development-report artifacts/validation/development-stage2/small-precision_070.json \
+  --development-report artifacts/validation/development-stage2/small-precision_075.json \
+  --development-report artifacts/validation/development-stage2/small-precision_080.json \
   --output-lock artifacts/validation/threshold-lock.json \
   --output-config artifacts/validation/frozen-profile.yaml
 ```
@@ -202,7 +210,7 @@ Run the frozen winner once on S3, then confirm without retuning:
 python scripts/validate_grouped_pipeline.py \
   --config artifacts/validation/frozen-profile.yaml \
   --manifest data/processed/gmdcsa24/manifest.json \
-  --dataset-root data/raw/gmdcsa24/extracted/REPOSITORY_ROOT \
+  --dataset-root data/raw/gmdcsa24/extracted/ekramalam-GMDCSA24-A-Dataset-for-Human-Fall-Detection-in-Videos-d3edb5d \
   --partition threshold_validation \
   --output-json artifacts/validation/frozen-s3.json
 

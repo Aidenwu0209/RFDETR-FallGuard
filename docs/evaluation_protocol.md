@@ -44,16 +44,20 @@ fallback, and mock components. Mock timing is labeled `MOCK_ENGINEERING_ONLY`.
 
 The small cascade protocol is fixed before execution:
 
-1. Four provisional configs are generated before grouped results are inspected.
+1. Four provisional configs are generated before grouped results are inspected. If that stage
+   fails the declared gate, a bounded 0.60/0.70/0.75/0.80 precision grid may be declared as a
+   separate S1-S2-only development stage; S3 remains unread.
 2. Every Nano/Small candidate runs on the identical subject-isolated S1-S2 video list.
 3. `select_thresholds.py` recomputes metrics from clip rows, rejects mixed subjects, mismatched
    manifests, different video lists, duplicate candidates, or config/report parameter drift.
 4. Candidate eligibility uses a declared minimum recall and maximum false-positive clip count.
    Ranking then uses fewer false positives, higher F1/recall/specificity, and Nano only as an exact
-   metric tie-break. A failed gate is reported; it is never relaxed silently.
+   metric tie-break, then lower detector confidence within the same preferred model to preserve
+   recall margin. A failed gate is reported; it is never relaxed silently.
 5. The winner's detector, ByteTrack, temporal, and event parameters are frozen in a complete config.
-6. S3 is evaluated once with those exact checkpoint hashes and parameters. Confirmation rejects
-   any overlap with S1-S2 or any retuning.
+6. Reports record both the Git revision and a SHA-256 fingerprint over the executable pipeline
+   sources. S3 is evaluated once with the same pipeline fingerprint, checkpoint hash, and frozen
+   parameters. Confirmation rejects any overlap with S1-S2 or any retuning.
 7. S4 requires the matching confirmation artifact, an explicit unlock flag, and full-subject
    evaluation. S4 never participates in model or threshold selection.
 

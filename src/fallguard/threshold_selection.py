@@ -208,6 +208,9 @@ def validate_grouped_report(report: dict[str, Any], *, expected_partition: str) 
         or GIT_COMMIT_PATTERN.fullmatch(implementation_revision) is None
     ):
         raise ConfigurationError("grouped report has no valid implementation Git commit")
+    pipeline_fingerprint = _require_sha256(
+        report.get("pipeline_implementation_sha256"), "pipeline_implementation_sha256"
+    )
     if report.get("partition") != expected_partition:
         raise ConfigurationError(
             f"report partition must be {expected_partition}, got {report.get('partition')}"
@@ -314,12 +317,13 @@ def validate_grouped_report(report: dict[str, Any], *, expected_partition: str) 
         "metrics": computed_metrics,
         "model_variant": model_variant,
         "implementation_git_commit": implementation_revision,
+        "pipeline_implementation_sha256": pipeline_fingerprint,
     }
 
 
 def _candidate_sort_key(
     candidate: dict[str, Any], preferred_variant: str
-) -> tuple[int, float, float, float, int, str, str]:
+) -> tuple[int, float, float, float, int, float, str, str]:
     metrics = candidate["metrics"]
     f1 = float(metrics["f1"]) if metrics["f1"] is not None else -1.0
     recall = float(metrics["recall"]) if metrics["recall"] is not None else -1.0
@@ -330,6 +334,7 @@ def _candidate_sort_key(
         -recall,
         -specificity,
         0 if candidate["model_variant"] == preferred_variant else 1,
+        float(candidate["report"]["pipeline_parameters"]["detector"]["confidence_threshold"]),
         str(candidate["model_variant"]),
         str(candidate["candidate_id"]),
     )
@@ -360,7 +365,7 @@ def select_thresholds(
             {
                 "weights_sha256": report["weights_sha256"],
                 "model_variant": report["model_variant"],
-                "implementation_git_commit": report["implementation_git_commit"],
+                "pipeline_implementation_sha256": report["pipeline_implementation_sha256"],
                 "pipeline_parameters": report["pipeline_parameters"],
             }
         )
@@ -374,8 +379,8 @@ def select_thresholds(
             raise ConfigurationError("candidate reports use different dataset manifests")
         if report["protocol"] != reference["protocol"]:
             raise ConfigurationError("candidate reports use different grouped protocols")
-        if report["implementation_git_commit"] != reference["implementation_git_commit"]:
-            raise ConfigurationError("candidate reports use different implementation revisions")
+        if report["pipeline_implementation_sha256"] != reference["pipeline_implementation_sha256"]:
+            raise ConfigurationError("candidate reports use different pipeline implementations")
         if item["video_ids"] != reference_video_ids:
             raise ConfigurationError(
                 "candidate reports do not evaluate the same development videos"
@@ -409,11 +414,12 @@ def select_thresholds(
                 "highest_recall",
                 "highest_specificity",
                 f"prefer_{preferred_variant}_on_exact_metric_tie",
+                "lowest_detector_confidence_on_remaining_tie",
                 "deterministic_candidate_id",
             ],
         },
         "manifest_sha256": reference["manifest_sha256"],
-        "implementation_git_commit": reference["implementation_git_commit"],
+        "pipeline_implementation_sha256": reference["pipeline_implementation_sha256"],
         "protocol": deepcopy(reference["protocol"]),
         "development_video_ids": reference_video_ids,
         "candidate_count": len(validated),
@@ -434,6 +440,7 @@ def select_thresholds(
             "candidate_id": selected["candidate_id"],
             "model_variant": selected_report["model_variant"],
             "implementation_git_commit": selected_report["implementation_git_commit"],
+            "pipeline_implementation_sha256": selected_report["pipeline_implementation_sha256"],
             "weights_path": selected_report["weights_path"],
             "weights_sha256": selected_report["weights_sha256"],
             "config_sha256": selected_report["config_sha256"],
@@ -507,7 +514,7 @@ def confirm_thresholds(
     if not isinstance(selected, dict):
         raise ConfigurationError("threshold lock has no selected candidate")
     validated = validate_grouped_report(validation_report, expected_partition=VALIDATION_PARTITION)
-    for field in ("manifest_sha256", "protocol", "implementation_git_commit"):
+    for field in ("manifest_sha256", "protocol", "pipeline_implementation_sha256"):
         if validation_report[field] != lock.get(field):
             raise ConfigurationError(f"S3 report {field} differs from the threshold lock")
     for field in ("model_variant", "weights_sha256", "pipeline_parameters"):
@@ -545,12 +552,14 @@ def confirm_thresholds(
                 "candidate_id",
                 "model_variant",
                 "implementation_git_commit",
+                "pipeline_implementation_sha256",
                 "weights_path",
                 "weights_sha256",
                 "pipeline_parameters",
             )
         },
         "validation_metrics": metrics,
+        "validation_implementation_git_commit": validation_report["implementation_git_commit"],
         "locked_test": {
             "partition": LOCKED_TEST_PARTITION,
             "status": "locked_pending_final_evaluation",
@@ -573,7 +582,7 @@ def validate_locked_test_confirmation(
     model_variant: str,
     weights_sha256: str,
     pipeline_parameters: dict[str, Any],
-    implementation_git_commit: str,
+    pipeline_implementation_sha256: str,
 ) -> None:
     if confirmation.get("confirmation_kind") != THRESHOLD_CONFIRMATION_KIND:
         raise ConfigurationError("not an accepted S3 confirmation artifact")
@@ -584,7 +593,7 @@ def validate_locked_test_confirmation(
         raise ConfigurationError("S3 confirmation uses a different GMDCSA-24 manifest")
     if confirmation.get("protocol") != protocol:
         raise ConfigurationError("S3 confirmation uses a different grouped protocol")
-    if selected.get("implementation_git_commit") != implementation_git_commit:
+    if selected.get("pipeline_implementation_sha256") != pipeline_implementation_sha256:
         raise ConfigurationError("locked-test implementation differs from the S3 confirmation")
     if (
         selected.get("model_variant") != model_variant

@@ -113,6 +113,7 @@ def grouped_report(
         "validation_kind": "GROUPED_CLIP_LEVEL_INTERNAL_VALIDATION",
         "formal_generalization_claim": False,
         "implementation_git_commit": "e" * 40,
+        "pipeline_implementation_sha256": "f" * 64,
         "partition": partition,
         "subset": "deterministic_small_subset",
         "weights_sha256": ("a" if variant == "nano" else "b") * 64,
@@ -179,6 +180,24 @@ def test_selection_prefers_nano_on_exact_metric_tie_and_emits_formal_config(
     frozen.assert_formal_ready()
     assert frozen.detector.weights_path is not None
     assert frozen.benchmark.formal is True
+
+
+def test_selection_uses_lower_detector_confidence_on_same_model_metric_tie(
+    development_config,
+) -> None:
+    lower = grouped_report(development_config, "nano")
+    higher = deepcopy(lower)
+    for report, confidence in ((lower, 0.75), (higher, 0.80)):
+        report["pipeline_parameters"]["detector"]["confidence_threshold"] = confidence
+        report["config_snapshot"]["detector"]["confidence_threshold"] = confidence
+
+    lock = select_thresholds(
+        [("lower.json", lower), ("higher.json", higher)],
+        minimum_recall=1.0,
+        maximum_false_positive_clips=0,
+    )
+
+    assert lock["selected"]["pipeline_parameters"]["detector"]["confidence_threshold"] == 0.75
 
 
 def test_selection_rejects_non_development_or_noncomparable_reports(development_config) -> None:
@@ -260,7 +279,7 @@ def test_s3_confirmation_requires_unchanged_parameters_and_disjoint_videos(
         model_variant=validation["model_variant"],
         weights_sha256=validation["weights_sha256"],
         pipeline_parameters=validation["pipeline_parameters"],
-        implementation_git_commit=validation["implementation_git_commit"],
+        pipeline_implementation_sha256=validation["pipeline_implementation_sha256"],
     )
 
     changed = deepcopy(validation)
@@ -292,7 +311,7 @@ def test_s3_confirmation_requires_unchanged_parameters_and_disjoint_videos(
             model_variant="small",
             weights_sha256=validation["weights_sha256"],
             pipeline_parameters=validation["pipeline_parameters"],
-            implementation_git_commit=validation["implementation_git_commit"],
+            pipeline_implementation_sha256=validation["pipeline_implementation_sha256"],
         )
 
 
