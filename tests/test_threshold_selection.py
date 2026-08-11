@@ -16,6 +16,7 @@ from fallguard.schemas import DetectionMode
 from fallguard.threshold_selection import (
     CANDIDATE_PRESETS,
     EXPANDED_PRECISION_PRESETS,
+    canonical_sha256,
     clip_metrics,
     confirm_thresholds,
     frozen_config_from_lock,
@@ -336,6 +337,62 @@ def test_s3_confirmation_requires_unchanged_parameters_and_disjoint_videos(
             pipeline_parameters=validation["pipeline_parameters"],
             pipeline_implementation_sha256=validation["pipeline_implementation_sha256"],
         )
+
+
+def test_locked_test_accepts_only_audited_control_plane_migration(
+    development_config,
+) -> None:
+    development = grouped_report(development_config, "small")
+    lock = select_thresholds(
+        [("small.json", development)],
+        minimum_recall=1.0,
+        maximum_false_positive_clips=0,
+    )
+    validation = grouped_report(development_config, "small", "threshold_validation")
+    confirmation = confirm_thresholds(
+        lock,
+        validation,
+        minimum_recall=1.0,
+        maximum_false_positive_clips=0,
+    )
+    current_fingerprint = "1" * 64
+    runtime_core = "2" * 64
+    with pytest.raises(ConfigurationError, match="implementation differs"):
+        validate_locked_test_confirmation(
+            confirmation,
+            manifest_sha256=validation["manifest_sha256"],
+            protocol=validation["protocol"],
+            model_variant=validation["model_variant"],
+            weights_sha256=validation["weights_sha256"],
+            pipeline_parameters=validation["pipeline_parameters"],
+            pipeline_implementation_sha256=current_fingerprint,
+            runtime_core_sha256=runtime_core,
+        )
+
+    migrated = deepcopy(confirmation)
+    migrated["control_plane_migration"] = {
+        "migration_kind": "JSON_KEY_CANONICALIZATION_ONLY",
+        "original_confirmation_sha256": canonical_sha256(confirmation),
+        "from_pipeline_implementation_sha256": confirmation["selected"][
+            "pipeline_implementation_sha256"
+        ],
+        "to_pipeline_implementation_sha256": current_fingerprint,
+        "runtime_core_sha256_before": runtime_core,
+        "runtime_core_sha256_after": runtime_core,
+        "model_or_threshold_parameter_changed": False,
+        "validation_partition_reused": False,
+    }
+    json_round_tripped_parameters = json.loads(json.dumps(validation["pipeline_parameters"]))
+    validate_locked_test_confirmation(
+        migrated,
+        manifest_sha256=validation["manifest_sha256"],
+        protocol=validation["protocol"],
+        model_variant=validation["model_variant"],
+        weights_sha256=validation["weights_sha256"],
+        pipeline_parameters=json_round_tripped_parameters,
+        pipeline_implementation_sha256=current_fingerprint,
+        runtime_core_sha256=runtime_core,
+    )
 
 
 @pytest.mark.integration

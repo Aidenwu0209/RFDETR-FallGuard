@@ -632,6 +632,7 @@ def validate_locked_test_confirmation(
     weights_sha256: str,
     pipeline_parameters: dict[str, Any],
     pipeline_implementation_sha256: str,
+    runtime_core_sha256: str | None = None,
 ) -> None:
     if not is_threshold_confirmation(confirmation):
         raise ConfigurationError("not an accepted grouped confirmation artifact")
@@ -642,11 +643,28 @@ def validate_locked_test_confirmation(
         raise ConfigurationError("grouped confirmation uses a different dataset manifest")
     if confirmation.get("protocol") != protocol:
         raise ConfigurationError("grouped confirmation uses a different grouped protocol")
-    if selected.get("pipeline_implementation_sha256") != pipeline_implementation_sha256:
-        raise ConfigurationError("locked-test implementation differs from the confirmation")
+    selected_fingerprint = selected.get("pipeline_implementation_sha256")
+    if selected_fingerprint != pipeline_implementation_sha256:
+        migration = confirmation.get("control_plane_migration")
+        confirmation_without_migration = deepcopy(confirmation)
+        confirmation_without_migration.pop("control_plane_migration", None)
+        if (
+            not isinstance(migration, dict)
+            or migration.get("migration_kind") != "JSON_KEY_CANONICALIZATION_ONLY"
+            or migration.get("original_confirmation_sha256")
+            != canonical_sha256(confirmation_without_migration)
+            or migration.get("from_pipeline_implementation_sha256") != selected_fingerprint
+            or migration.get("to_pipeline_implementation_sha256") != pipeline_implementation_sha256
+            or migration.get("runtime_core_sha256_before") != runtime_core_sha256
+            or migration.get("runtime_core_sha256_after") != runtime_core_sha256
+            or migration.get("model_or_threshold_parameter_changed") is not False
+            or migration.get("validation_partition_reused") is not False
+        ):
+            raise ConfigurationError("locked-test implementation differs from the confirmation")
     if (
         selected.get("model_variant") != model_variant
         or selected.get("weights_sha256") != weights_sha256
-        or selected.get("pipeline_parameters") != pipeline_parameters
+        or canonical_sha256(selected.get("pipeline_parameters"))
+        != canonical_sha256(pipeline_parameters)
     ):
         raise ConfigurationError("locked-test configuration differs from the confirmation")

@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import re
 import subprocess
@@ -15,6 +14,10 @@ from fallguard.config import AppConfig, load_config
 from fallguard.detection.rfdetr_adapter import RFDETRDetector
 from fallguard.exceptions import ConfigurationError
 from fallguard.factory import build_pipeline
+from fallguard.implementation_fingerprint import (
+    pipeline_implementation_sha256 as compute_pipeline_implementation_sha256,
+)
+from fallguard.implementation_fingerprint import runtime_core_sha256
 from fallguard.session import make_session_id
 from fallguard.threshold_selection import (
     clip_metrics,
@@ -43,16 +46,7 @@ def implementation_git_commit() -> str:
 
 def pipeline_implementation_sha256() -> str:
     project_root = Path(__file__).resolve().parents[1]
-    sources = sorted((project_root / "src/fallguard").rglob("*.py"))
-    sources.append(Path(__file__).resolve())
-    digest = hashlib.sha256()
-    for source in sources:
-        relative = source.relative_to(project_root)
-        digest.update(str(relative).encode("utf-8"))
-        digest.update(b"\0")
-        digest.update(source.read_bytes())
-        digest.update(b"\0")
-    return digest.hexdigest()
+    return compute_pipeline_implementation_sha256(project_root)
 
 
 def pipeline_parameters(config: AppConfig) -> dict[str, Any]:
@@ -139,6 +133,7 @@ def main() -> None:
                 weights_sha256=weights_sha256,
                 pipeline_parameters=parameters,
                 pipeline_implementation_sha256=pipeline_implementation_sha256(),
+                runtime_core_sha256=runtime_core_sha256(Path(__file__).resolve().parents[1]),
             )
         except ConfigurationError as exc:
             parser.error(str(exc))

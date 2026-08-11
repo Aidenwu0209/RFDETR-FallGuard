@@ -31,6 +31,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
         "generate_threshold_candidates.py",
         "select_thresholds.py",
         "confirm_thresholds.py",
+        "migrate_threshold_confirmation.py",
     ],
 )
 def test_required_cli_help_is_runnable(script: str) -> None:
