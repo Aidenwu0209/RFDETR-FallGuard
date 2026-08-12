@@ -37,6 +37,7 @@ def build_providers(config: AppConfig) -> dict[str, SemanticProvider]:
             config.semantic.model,
             base_url=config.semantic.openai_base_url,
             timeout_seconds=config.semantic.timeout_seconds,
+            reasoning_effort=config.semantic.reasoning_effort,
         )
     if "deepseek" in names:
         if not config.semantic.model:
@@ -45,6 +46,8 @@ def build_providers(config: AppConfig) -> dict[str, SemanticProvider]:
             config.semantic.model,
             base_url=config.semantic.deepseek_base_url,
             timeout_seconds=config.semantic.timeout_seconds,
+            reasoning_effort=config.semantic.reasoning_effort,
+            thinking_enabled=config.semantic.deepseek_thinking,
         )
     if "local_qwen" in names:
         if config.semantic.local_model_path is None:

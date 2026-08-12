@@ -6,7 +6,7 @@ import base64
 import os
 import time
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from fallguard.exceptions import DependencyUnavailableError, ProviderUnavailableError
 from fallguard.schemas import ProviderCapabilities, SemanticAssessment, SemanticReviewRequest
@@ -24,11 +24,17 @@ class OpenAIProvider(SemanticProvider):
     )
 
     def __init__(
-        self, model: str, *, base_url: str | None = None, timeout_seconds: float = 30
+        self,
+        model: str,
+        *,
+        base_url: str | None = None,
+        timeout_seconds: float = 30,
+        reasoning_effort: Literal["low", "medium", "high", "xhigh", "max"] | None = None,
     ) -> None:
         self.model = model
         self.base_url = base_url
         self.timeout_seconds = timeout_seconds
+        self.reasoning_effort = reasoning_effort
 
     def health_check(self, *, live: bool = False) -> dict[str, str | bool]:
         if live:
@@ -70,11 +76,15 @@ class OpenAIProvider(SemanticProvider):
                     }
                 )
             started = time.perf_counter()
-            response = client.responses.parse(
-                model=self.model,
-                input=cast(Any, [{"role": "user", "content": content}]),
-                text_format=ProviderPayload,
-            )
+            request_options: dict[str, Any] = {
+                "model": self.model,
+                "input": cast(Any, [{"role": "user", "content": content}]),
+                "text_format": ProviderPayload,
+                "store": False,
+            }
+            if self.reasoning_effort is not None:
+                request_options["reasoning"] = {"effort": self.reasoning_effort}
+            response = client.responses.parse(**request_options)
         except (OpenAIError, OSError, ValueError) as exc:
             raise ProviderUnavailableError(f"OpenAI review failed: {exc}") from exc
         latency_ms = (time.perf_counter() - started) * 1000.0
@@ -82,6 +92,7 @@ class OpenAIProvider(SemanticProvider):
         if payload is None:
             raise ProviderUnavailableError("OpenAI returned no parsed structured assessment")
         usage = getattr(response, "usage", None)
+        output_details = getattr(usage, "output_tokens_details", None)
         return SemanticAssessment(
             **payload.model_dump(),
             provider=self.name,
@@ -92,6 +103,7 @@ class OpenAIProvider(SemanticProvider):
             provider_success=True,
             input_tokens=getattr(usage, "input_tokens", None),
             output_tokens=getattr(usage, "output_tokens", None),
+            reasoning_tokens=getattr(output_details, "reasoning_tokens", None),
         )
 
     @staticmethod

@@ -232,6 +232,7 @@ class SemanticAssessment(StrictModel):
     fallback_reason: str | None = None
     input_tokens: Annotated[int, Field(ge=0)] | None = None
     output_tokens: Annotated[int, Field(ge=0)] | None = None
+    reasoning_tokens: Annotated[int, Field(ge=0)] | None = None
     ground_truth_verified: bool = False
 
 

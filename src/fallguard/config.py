@@ -49,6 +49,9 @@ class TrackingConfig(ConfigSection):
 
 class TemporalConfig(ConfigSection):
     smoothing_window: int = Field(gt=0)
+    candidate_on_lying_posture: bool = False
+    confirm_on_falling_posture: bool = False
+    confirm_on_lying_posture: bool = False
     aspect_ratio_fall_min: float | None = Field(default=None, gt=0.0)
     vertical_speed_frame_height_per_second_min: float | None = None
     suspect_duration_seconds: float | None = Field(default=None, gt=0.0)
@@ -89,6 +92,8 @@ class SemanticConfig(ConfigSection):
     allow_cloud_images: bool
     max_images: int = Field(gt=0)
     timeout_seconds: float = Field(gt=0.0)
+    reasoning_effort: Literal["low", "medium", "high", "xhigh", "max"] | None = None
+    deepseek_thinking: bool = True
     openai_base_url: str | None = None
     deepseek_base_url: str = "https://api.deepseek.com"
     local_model_path: Path | None = None

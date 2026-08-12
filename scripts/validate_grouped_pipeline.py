@@ -46,7 +46,7 @@ def implementation_git_commit() -> str:
 
 def pipeline_implementation_sha256() -> str:
     project_root = Path(__file__).resolve().parents[1]
-    return compute_pipeline_implementation_sha256(project_root)
+    return str(compute_pipeline_implementation_sha256(project_root))
 
 
 def pipeline_parameters(config: AppConfig) -> dict[str, Any]:
@@ -164,6 +164,7 @@ def main() -> None:
                 "expected_fall": record["label"] == "fall",
                 "predicted_fall": bool(events),
                 "predicted_event_count": len(events),
+                "event_start_seconds": sorted(event.start_time for event in events),
                 "first_event_start_seconds": min(
                     (event.start_time for event in events), default=None
                 ),
