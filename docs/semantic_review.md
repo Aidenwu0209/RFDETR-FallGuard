@@ -17,7 +17,7 @@ latency_ms
 schema_valid
 provider_success
 model_recommends_alert
-input_tokens / output_tokens when supplied
+input_tokens / output_tokens / reasoning_tokens when supplied
 ground_truth_verified
 ```
 
@@ -36,6 +36,12 @@ Only labeled training/evaluation data sets it true.
 The selected model must actually support the requested capability. The router truncates images
 to the configured/provider maximum, removes images for text-only providers, and records a
 fallback reason. Formal experiments disable fallback.
+
+`semantic.reasoning_effort` is passed explicitly when configured. OpenAI-compatible Responses
+requests set `store=false`. DeepSeek V4 requests can enable thinking with
+`semantic.deepseek_thinking`; its prompt spells out numeric, boolean, and null field types before
+Pydantic validation. Provider aliases exposed by a third-party gateway are gateway models, not
+proof that the same names exist on the official OpenAI endpoint.
 
 ## Health and paid tests
 

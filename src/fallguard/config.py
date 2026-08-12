@@ -89,6 +89,8 @@ class SemanticConfig(ConfigSection):
     allow_cloud_images: bool
     max_images: int = Field(gt=0)
     timeout_seconds: float = Field(gt=0.0)
+    reasoning_effort: Literal["low", "medium", "high", "xhigh", "max"] | None = None
+    deepseek_thinking: bool = True
     openai_base_url: str | None = None
     deepseek_base_url: str = "https://api.deepseek.com"
     local_model_path: Path | None = None

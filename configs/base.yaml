@@ -53,6 +53,8 @@ semantic:
   allow_cloud_images: false
   max_images: 3
   timeout_seconds: 30.0
+  reasoning_effort: null
+  deepseek_thinking: true
   openai_base_url: null
   deepseek_base_url: https://api.deepseek.com
   local_model_path: null
