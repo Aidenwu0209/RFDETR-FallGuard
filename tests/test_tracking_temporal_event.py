@@ -239,6 +239,40 @@ def test_static_lying_or_wide_box_cannot_start_fall_candidate(development_config
     assert machine.state_for(wide_upright) == MotionState.UPRIGHT
 
 
+def test_high_recall_profile_can_confirm_explicit_lying_posture(development_config) -> None:
+    temporal = development_config.temporal.model_copy(
+        update={
+            "candidate_on_lying_posture": True,
+            "confirm_on_falling_posture": True,
+            "confirm_on_lying_posture": True,
+        }
+    )
+    machine = TemporalStateMachine(temporal, development_config.detector.posture_groups)
+    events = EventManager(development_config.event)
+    observation = tracked(0, 0.0, (10, 60, 95, 90), "lying")
+
+    state_transition = machine.update(observation, feature(0, 0.0, 2.8, 0.0, "lying"))
+
+    assert state_transition is not None
+    assert state_transition.next_state == MotionState.LYING
+    event = events.on_transition(state_transition)
+    assert event is not None
+    assert event.start_frame == 0
+    assert event.metadata["lying_started_at_seconds"] == 0.0
+
+
+def test_high_recall_profile_can_confirm_explicit_falling_posture(development_config) -> None:
+    temporal = development_config.temporal.model_copy(update={"confirm_on_falling_posture": True})
+    machine = TemporalStateMachine(temporal, development_config.detector.posture_groups)
+    observation = tracked(0, 0.0, (20, 30, 90, 90), "falling")
+
+    state_transition = machine.update(observation, feature(0, 0.0, 1.2, 0.0, "falling"))
+
+    assert state_transition is not None
+    assert state_transition.next_state == MotionState.FALLING
+    assert "immediately confirmed" in state_transition.reason
+
+
 def test_downward_speed_can_start_candidate_without_falling_class(development_config) -> None:
     machine = TemporalStateMachine(
         development_config.temporal,

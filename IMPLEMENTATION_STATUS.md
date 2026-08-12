@@ -1,7 +1,7 @@
 # Implementation Status
 
-Evidence date: 2026-08-11. Runtime evidence was collected on
-`/home/aidenwu/Documents/RFDETR-FallGuard` on the Legion host. Only these states are used:
+Evidence date: 2026-08-12. The latest runtime evidence was collected on the RTX 5070 Ti Windows
+host under `C:\Users\27250\Documents\RFDETR-FallGuard`. Only these states are used:
 `VERIFIED_UNIT`, `VERIFIED_INTEGRATION`, `CODE_COMPLETE_UNVALIDATED`, `BLOCKED_EXTERNAL`, and
 `NOT_IMPLEMENTED`.
 
@@ -16,12 +16,13 @@ Evidence date: 2026-08-11. Runtime evidence was collected on
 | M3 pinned ByteTrack adapter and TrackManager | VERIFIED_INTEGRATION | Real `supervision==0.30.0` tests pass for posture-class changes and one-frame disappearance/reappearance with stable ID; scope, history, expiry, and empty-frame advancement tested |
 | M4 temporal state machine, events, keyframes | VERIFIED_INTEGRATION | A candidate now starts only from downward motion or the configured fall class; static lying/aspect ratio is supporting evidence only. Event records are promoted only after FALLING/LYING, so duration thresholds affect event presence. Seconds/coordinates/smoothing, timeout, atomic close/reopen, bounded buffer, random-access reread, and keyframes are tested |
 | M5 Router, Mock Provider, privacy, AlertManager | VERIFIED_INTEGRATION | Mock end-to-end route passes; cloud image double-consent, fallback reason, unexpected-error propagation, structured schema, redaction, and application-owned alert tested |
-| M5 OpenAI, DeepSeek, Local Qwen provider implementations | CODE_COMPLETE_UNVALIDATED | OpenAI 2.53.0 structured-parse SDK contract is present; no paid API call or Local Qwen model load was authorized |
+| M5 semantic provider implementations | VERIFIED_INTEGRATION | OpenAI-compatible gateway and official DeepSeek V4 Flash completed a fixed text-only schema matrix; pinned official Qwen3.5-4B completed real three-image local inference on 30 Small/Nano candidate events with 30/30 provider success and valid JSON. These are integration screens, not comparative accuracy claims |
 | M5 QLoRA schema, grouped split, packing, validation, dry-run, execution entry | VERIFIED_UNIT | Synthetic manifests validate, cross-split leakage is rejected, dry-run reports missing real manifests as `BLOCKED_EXTERNAL`; no training ran |
 | M6 detection/event/deployment evaluation and experiment recorder | VERIFIED_INTEGRATION | Official detection delegation, one-to-one event metrics, unavailable-metric reasons, mock formal rejection, warm-up reset, resource timing, and reproducibility snapshot tested |
-| M6 GMDCSA-24 grouped validation preparation | VERIFIED_INTEGRATION | Zenodo v2.0 archive MD5 verified; 160 readable videos, 4 subjects, 79 ADL/81 Fall, no duplicate hashes or subject leakage; S1-S2 development, S3 validation, S4 locked test; 16-video subset generated |
+| M6 GMDCSA-24 grouped validation preparation | VERIFIED_INTEGRATION | Zenodo v2.0 archive MD5 verified; 160 readable videos, 4 subjects, 79 ADL/81 Fall, no duplicate hashes or subject leakage. The recovery-v2 protocol uses three-fold subject-isolated CV on Subjects 1-3 and keeps Subject 4 locked |
 | M6 real cascade engineering smoke | VERIFIED_INTEGRATION | Official Small `person_only` completed RF-DETR -> ByteTrack -> Temporal -> Event on one Fall and one ADL clip; both produced one unique candidate, demonstrating execution and also why person-only output is invalid for final thresholds |
 | M6 historical GMDCSA threshold cycle | VERIFIED_INTEGRATION | Eight bounded S1-S2 candidates were evaluated with matching evidence. Nano confidence/tracker activation 0.75 passed development but failed the one-time S3 gate at recall 0.5. No GMDCSA threshold was confirmed; S4 remains unused and this negative result is immutable historical evidence |
+| M6 recovery frontend and semantic screen | VERIFIED_INTEGRATION | Opened Fall29 false negatives were attributed to Temporal stages for diagnosis only. High-recall Small/Nano frontends and pinned Qwen3.5-4B were run on 12 deterministic GMDCSA screening clips; both full cascades produced 6 TP, 0 FP, 0 FN, 6 TN against weak clip labels. This proves execution only; human event labels and all-video three-fold validation remain required |
 | M6 fresh Figshare-Fall29 protocol | VERIFIED_INTEGRATION | Official CC BY 4.0 archive bytes/MD5 and extraction were verified. Two auxiliary timelapses and one exact duplicate were excluded only from the derived manifest, leaving 2,013 unique subject videos. Development, validation, and locked-test groups contain disjoint subjects; the declaration predates model results |
 | M6 Fall29 threshold freeze and validation | VERIFIED_INTEGRATION | Twelve Nano/Small candidates used the same 48 development clips. Small confidence/tracker activation 0.40 achieved 24 TP, 0 FP, 0 FN, 24 TN and was frozen. Its one-time 20-clip validation achieved 9 TP, 0 FP, 1 FN, 10 TN (recall 0.90, F1 0.9474), exactly passing the predeclared gate without retuning |
 | M6 full locked cascade test | VERIFIED_INTEGRATION | The confirmed Small profile evaluated all 374 locked clips from subjects 13/14/20/22/29: 139 TP, 19 FP, 64 FN, 152 TN; precision 0.8797, recall 0.6847, specificity 0.8889, F1 0.7701. Independent recomputation matched; IDs, checkpoint, parameters, manifest, commit, and implementation fingerprint were bound. This confirms an internal threshold, not external generalization |
@@ -32,19 +33,19 @@ Evidence date: 2026-08-11. Runtime evidence was collected on
 ## Baseline QA evidence
 
 ```text
-.venv/bin/ruff format .
-  exit 0; 104 files unchanged on the latest implementation run
-.venv/bin/ruff check .
+python -m ruff format --check .
+  exit 0; 117 files already formatted
+python -m ruff check .
   exit 0; all checks passed
-.venv/bin/mypy src app scripts
-  exit 0; success, 70 source files
-.venv/bin/pytest -q
-  exit 0; 85 passed, 2 deselected, 0 failed, 0 skipped, 1 warning
-.venv/bin/python -m compileall -q src app scripts tests datasets
+python -m mypy src scripts
+  exit 0; success, 75 source files
+python -m pytest -q
+  exit 0; 107 passed, 2 deselected, 0 failed, 0 skipped, 1 warning
+python -m compileall -q src app scripts tests datasets
   exit 0
-.venv/bin/python scripts/check_environment.py
+python scripts/check_environment.py
   exit 0; local-only audit, network_or_paid_call_performed=false
-.venv/bin/python scripts/smoke_gradio.py
+python scripts/smoke_gradio.py
   exit 0; HTTP 200 and server closed
 21 required scripts with --help
   exit 0
@@ -66,6 +67,9 @@ therefore reproducible today but requires a deliberate future migration.
   dHash near-duplicate pairs and no person/video group identifiers. They are not presented as
   scientific generalization evidence.
 - The historical GMDCSA S3 result remains a valid negative result and was not reused for tuning.
+- The new GMDCSA recovery screen uses weak clip labels on only 12 videos. Its perfect screen result
+  is not a formal accuracy claim, and Subject 4 remains locked until all-video three-fold selection
+  is complete.
 - Fall29 confirms Small confidence/tracker activation 0.40 within its predeclared internal
   subject-isolated protocol. Locked-test recall fell to 0.6847, so the result does not establish
   real-world or elderly-population generalization and no detection-delay metric is reported.

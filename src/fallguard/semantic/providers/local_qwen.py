@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import json
 import time
 from pathlib import Path
 from typing import Any
-
-from PIL import Image
 
 from fallguard.exceptions import (
     DependencyUnavailableError,
@@ -16,6 +13,20 @@ from fallguard.exceptions import (
 )
 from fallguard.schemas import ProviderCapabilities, SemanticAssessment, SemanticReviewRequest
 from fallguard.semantic.base import ProviderPayload, SemanticProvider
+
+
+def parse_provider_payload(decoded: str) -> ProviderPayload:
+    """Accept raw JSON or one conventional JSON code fence, then validate strictly."""
+
+    stripped = decoded.strip()
+    if "```" in stripped and not stripped.startswith("```"):
+        raise ValueError("extra text appears outside Markdown fences")
+    if stripped.startswith("```"):
+        lines = stripped.splitlines()
+        if len(lines) < 3 or lines[0].lower() not in {"```", "```json"} or lines[-1] != "```":
+            raise ValueError("invalid or multiple Markdown fences around JSON payload")
+        stripped = "\n".join(lines[1:-1]).strip()
+    return ProviderPayload.model_validate_json(stripped)
 
 
 class LocalQwenProvider(SemanticProvider):
@@ -75,28 +86,33 @@ class LocalQwenProvider(SemanticProvider):
             raise ModelUnavailableError("Local Qwen load returned no processor or model")
         processor: Any = self._processor
         model: Any = self._model
-        images: list[Image.Image] = []
         schema_instruction = (
-            "Return only JSON with decision (fall/not_fall/uncertain), confidence, reason, "
-            "attempt_to_stand, risk_level (low/medium/high/unknown), model_recommends_alert."
+            "Return exactly one JSON object and no markdown or extra text. Use these exact "
+            "fields and JSON types: decision is one of fall, not_fall, uncertain; confidence "
+            "is a number from 0 to 1 or null; reason is a non-empty string; "
+            "attempt_to_stand is true, false, or null; risk_level is one of low, medium, "
+            "high, unknown; model_recommends_alert is true, false, or null."
         )
         started = time.perf_counter()
         try:
-            for item in request.image_refs:
-                with Image.open(item.path) as raw_image:
-                    images.append(raw_image.convert("RGB"))
-            content: list[dict[str, str]] = [{"type": "image"} for _ in images]
+            content: list[dict[str, object]] = [
+                {"type": "image", "path": str(item.path.resolve())} for item in request.image_refs
+            ]
             content.append(
                 {"type": "text", "text": schema_instruction + "\n" + request.text_context}
             )
             messages: list[dict[str, object]] = [{"role": "user", "content": content}]
-            text = processor.apply_chat_template(
+            inputs = processor.apply_chat_template(
                 messages,
-                tokenize=False,
                 add_generation_prompt=True,
+                tokenize=True,
+                return_dict=True,
+                return_tensors="pt",
+                enable_thinking=False,
             )
-            inputs = processor(text=[text], images=images, return_tensors="pt")
-            if hasattr(model, "device"):
+            if hasattr(model, "device") and hasattr(inputs, "to"):
+                inputs = inputs.to(model.device)
+            elif hasattr(model, "device"):
                 inputs = {key: value.to(model.device) for key, value in inputs.items()}
             generated = model.generate(**inputs, max_new_tokens=512, do_sample=False)
             prompt_length = inputs["input_ids"].shape[1]
@@ -104,14 +120,12 @@ class LocalQwenProvider(SemanticProvider):
                 generated[:, prompt_length:],
                 skip_special_tokens=True,
             )[0]
-            payload = ProviderPayload.model_validate(json.loads(decoded))
-        except (OSError, RuntimeError, ValueError, KeyError, json.JSONDecodeError) as exc:
+            payload = parse_provider_payload(decoded)
+        except (OSError, RuntimeError, ValueError, KeyError) as exc:
             raise ProviderUnavailableError(
-                f"Local Qwen review failed or returned invalid JSON: {exc}"
+                "Local Qwen review failed or returned invalid JSON: "
+                f"{exc}; decoded_prefix={locals().get('decoded', '')[:1000]!r}"
             ) from exc
-        finally:
-            for image in images:
-                image.close()
         return SemanticAssessment(
             **payload.model_dump(),
             provider=self.name,

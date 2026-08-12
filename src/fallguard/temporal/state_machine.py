@@ -68,7 +68,11 @@ class TemporalStateMachine:
         ratio_signal = features.aspect_ratio_width_over_height >= self.aspect_ratio_fall_min
         speed_signal = features.vertical_speed_frame_height_per_second >= self.vertical_speed_min
         fall_signal = ratio_signal or speed_signal or falling_posture or lying_posture
-        candidate_trigger = speed_signal or falling_posture
+        candidate_trigger = (
+            speed_signal
+            or falling_posture
+            or (self.config.candidate_on_lying_posture and lying_posture)
+        )
         upright_signal = (
             upright_posture
             and features.aspect_ratio_width_over_height <= self.upright_aspect_ratio_max
@@ -76,11 +80,29 @@ class TemporalStateMachine:
 
         next_state = current.state
         reason = ""
-        if current.state == MotionState.UPRIGHT and candidate_trigger:
-            next_state = MotionState.SUSPECTED
-            reason = self._signal_reason(False, speed_signal, falling_posture, False)
+        if current.state == MotionState.UPRIGHT:
+            if self.config.confirm_on_lying_posture and lying_posture:
+                next_state = MotionState.LYING
+                reason = "configured lying posture immediately confirmed"
+            elif self.config.confirm_on_falling_posture and falling_posture:
+                next_state = MotionState.FALLING
+                reason = "configured falling posture immediately confirmed"
+            elif candidate_trigger:
+                next_state = MotionState.SUSPECTED
+                reason = self._signal_reason(
+                    False,
+                    speed_signal,
+                    falling_posture,
+                    self.config.candidate_on_lying_posture and lying_posture,
+                )
         elif current.state == MotionState.SUSPECTED:
-            if upright_signal and not fall_signal:
+            if self.config.confirm_on_lying_posture and lying_posture:
+                next_state = MotionState.LYING
+                reason = "configured lying posture immediately confirmed"
+            elif self.config.confirm_on_falling_posture and falling_posture:
+                next_state = MotionState.FALLING
+                reason = "configured falling posture immediately confirmed"
+            elif upright_signal and not fall_signal:
                 next_state = MotionState.UPRIGHT
                 reason = "candidate cleared by upright posture and aspect ratio"
             elif elapsed_in_state + 1e-9 >= self.suspect_duration_seconds:

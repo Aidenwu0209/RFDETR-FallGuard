@@ -49,6 +49,9 @@ class TrackingConfig(ConfigSection):
 
 class TemporalConfig(ConfigSection):
     smoothing_window: int = Field(gt=0)
+    candidate_on_lying_posture: bool = False
+    confirm_on_falling_posture: bool = False
+    confirm_on_lying_posture: bool = False
     aspect_ratio_fall_min: float | None = Field(default=None, gt=0.0)
     vertical_speed_frame_height_per_second_min: float | None = None
     suspect_duration_seconds: float | None = Field(default=None, gt=0.0)

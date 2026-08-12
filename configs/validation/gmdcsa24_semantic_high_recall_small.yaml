@@ -1,0 +1,79 @@
+schema_version: 1
+runtime:
+  profile: experiment
+  source_id: gmdcsa24-recovery-cv-v2
+  session_id: null
+  log_level: INFO
+  log_json: true
+  device: auto
+detector:
+  backend: rfdetr
+  model_variant: small
+  mode: posture_multiclass
+  weights_path: checkpoints/small/checkpoint_best_total.pth
+  allow_weight_download: false
+  confidence_threshold: 0.4
+  person_class_names: [fallen, lying, sitting, standing]
+  class_names:
+    0: fallen
+    1: lying
+    2: sitting
+    3: standing
+  class_aliases: {}
+  posture_groups:
+    upright: [standing, sitting]
+    ambiguous: [bending, crouching]
+    fall: [fallen]
+    lying: [lying]
+tracking:
+  backend: bytetrack
+  track_activation_threshold: 0.4
+  lost_track_buffer: 30
+  minimum_matching_threshold: 0.8
+  minimum_consecutive_frames: 1
+  frame_rate: 30
+temporal:
+  smoothing_window: 7
+  candidate_on_lying_posture: true
+  confirm_on_falling_posture: true
+  confirm_on_lying_posture: true
+  aspect_ratio_fall_min: 1.05
+  vertical_speed_frame_height_per_second_min: 0.35
+  suspect_duration_seconds: 0.6
+  lying_duration_seconds: 1.0
+  upright_aspect_ratio_max: 0.68
+  track_timeout_seconds: 0.8
+event:
+  merge_gap_seconds: 2.0
+  cooldown_seconds: 5.0
+  timeout_seconds: 10.0
+  ring_buffer_frames: 180
+  before_offset_seconds: 1.0
+  after_offset_seconds: 1.0
+semantic:
+  provider: none
+  model: null
+  fallback_providers: []
+  allow_fallback: false
+  allow_mock: false
+  allow_cloud_images: false
+  max_images: 3
+  timeout_seconds: 60.0
+  openai_base_url: null
+  deepseek_base_url: https://api.deepseek.com
+  local_model_path: null
+alert:
+  alert_on_semantic_fall: true
+  alert_on_semantic_uncertain: false
+  high_temporal_risk_can_alert: false
+privacy:
+  retain_full_frames: false
+  retain_person_crops: true
+  hash_algorithm: sha256
+benchmark:
+  formal: true
+  warmup_iterations: 10
+  measured_iterations: 100
+  include_decode: false
+  include_ui: false
+  include_network: false
